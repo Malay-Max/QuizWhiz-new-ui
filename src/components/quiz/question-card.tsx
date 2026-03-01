@@ -5,7 +5,8 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import { cn } from "@/lib/utils";
 import { Question, Option } from "@/lib/schemas";
-import { CheckCircle2, XCircle, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, XCircle, Sparkles, Loader2 } from "lucide-react";
+import { explainQuestionAction } from "@/app/actions/explain-question";
 
 interface QuestionCardProps {
     question: Question;
@@ -22,12 +23,28 @@ export function QuestionCard({
     selectedOptionId,
     onExplain
 }: QuestionCardProps) {
-    const [showExplanation, setShowExplanation] = useState(false);
+    const [isExplaining, setIsExplaining] = useState(false);
+    const [aiExplanation, setAiExplanation] = useState<string | null>(null);
 
     // Reset explanation visibility when question changes
     useEffect(() => {
-        setShowExplanation(false);
+        setIsExplaining(false);
+        setAiExplanation(null);
     }, [question.id]);
+
+    const handleAskAI = async () => {
+        if (isExplaining || aiExplanation) return;
+        setIsExplaining(true);
+        try {
+            const explanation = await explainQuestionAction(question);
+            setAiExplanation(explanation);
+        } catch (error) {
+            console.error(error);
+            setAiExplanation("Something went wrong while asking the AI. Please try again later.");
+        } finally {
+            setIsExplaining(false);
+        }
+    };
 
     const handleOptionClick = (optionId: string) => {
         if (showFeedback) return;
@@ -112,28 +129,44 @@ export function QuestionCard({
                 </div>
             </div>
 
-            {/* AI Explain Bar */}
+            {/* Explanations Area */}
             {showFeedback && (
-                <div className="bg-slate-50 dark:bg-[#252b32] border-t border-slate-200 dark:border-slate-800">
-                    <button
-                        onClick={() => setShowExplanation(!showExplanation)}
-                        className="w-full flex items-center justify-between p-4 text-left group hover:bg-slate-100 dark:hover:bg-[#2c333a] transition-colors"
-                    >
-                        <div className="flex items-center gap-2 text-primary font-semibold text-sm">
-                            <Sparkles className="w-5 h-5" />
-                            <span>AI Explanation</span>
+                <div className="bg-slate-50 dark:bg-[#252b32] border-t border-slate-200 dark:border-slate-800 p-6">
+                    <div className="mb-4">
+                        <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Explanation</h4>
+                        <div className="text-sm text-slate-600 dark:text-slate-400 prose dark:prose-invert max-w-none">
+                            <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+                                {question.explanation}
+                            </ReactMarkdown>
                         </div>
-                        {showExplanation ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
-                    </button>
+                    </div>
 
-                    {showExplanation && (
-                        <div className="p-4 pt-0 text-sm text-slate-600 dark:text-slate-300 animate-in slide-in-from-top-2">
-                            <p>{question.explanation}</p>
-                            {onExplain && (
-                                <button onClick={onExplain} className="mt-2 text-xs text-primary underline">
-                                    Ask for more details...
-                                </button>
+                    {!aiExplanation && (
+                        <button
+                            onClick={handleAskAI}
+                            disabled={isExplaining}
+                            className="inline-flex items-center gap-2 px-4 py-2 mt-2 bg-gradient-to-r from-primary/10 to-purple-500/10 hover:from-primary/20 hover:to-purple-500/20 text-primary font-semibold text-sm rounded-lg transition-all border border-primary/20 hover:border-primary/40 disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                            {isExplaining ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Sparkles className="w-4 h-4" />
                             )}
+                            {isExplaining ? "Generating..." : "Ask AI for deeper explanation"}
+                        </button>
+                    )}
+
+                    {aiExplanation && (
+                        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-4">
+                            <h4 className="flex items-center gap-2 text-sm font-bold text-primary uppercase tracking-wider mb-3">
+                                <Sparkles className="w-4 h-4" />
+                                AI Tutor
+                            </h4>
+                            <div className="text-sm text-slate-600 dark:text-slate-300 prose dark:prose-invert max-w-none">
+                                <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+                                    {aiExplanation}
+                                </ReactMarkdown>
+                            </div>
                         </div>
                     )}
                 </div>

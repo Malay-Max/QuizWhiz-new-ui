@@ -1,14 +1,14 @@
 "use server";
 
 import { genkit } from "genkit";
-import { googleAI, gemini15Flash } from "@genkit-ai/googleai";
+import { googleAI } from "@genkit-ai/googleai";
 import { z } from "zod";
 import { Question } from "@/lib/schemas";
 
 // Initialize Genkit
 const ai = genkit({
     plugins: [googleAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY })],
-    model: gemini15Flash,
+    model: "googleai/gemini-2.5-flash",
 });
 
 // AI output schema - options are plain strings for the AI, we convert afterwards
