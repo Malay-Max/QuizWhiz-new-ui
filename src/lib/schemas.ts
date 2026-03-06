@@ -42,3 +42,31 @@ export type Option = z.infer<typeof OptionSchema>;
 export type Question = z.infer<typeof QuestionSchema>;
 export type Category = z.infer<typeof CategorySchema>;
 export type UserProgress = z.infer<typeof UserProgressSchema>;
+
+// --- Mock Tests ---
+
+export const MockTestSchema = z.object({
+    id: z.string().optional(),
+    title: z.string().min(1, "Title is required"),
+    durationMinutes: z.number().int().min(1, "Duration must be at least 1 minute"),
+    numQuestions: z.number().int().min(1, "Must have at least 1 question"),
+    categoryIds: z.array(z.string()).min(1, "Select at least one category"),
+    targetUserIds: z.array(z.string()), // Target specific users
+    questionIds: z.array(z.string()), // The specific random question IDs for this test
+    createdAt: z.number(),
+    createdBy: z.string(), // Admin UID who created it
+});
+
+export type MockTest = z.infer<typeof MockTestSchema>;
+
+export const MockTestResultSchema = z.object({
+    id: z.string().optional(),
+    testId: z.string(),
+    userId: z.string(),
+    score: z.number(),
+    totalQuestions: z.number(),
+    answers: z.record(z.string(), z.string()), // Map of questionId -> selectedOptionId
+    completedAt: z.number(),
+});
+
+export type MockTestResult = z.infer<typeof MockTestResultSchema>;

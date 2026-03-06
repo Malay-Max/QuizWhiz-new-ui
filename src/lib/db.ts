@@ -14,7 +14,7 @@ import {
     limit,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Question, Category, UserProgress } from "./schemas";
+import { Question, Category, UserProgress, MockTest, MockTestResult } from "./schemas";
 
 // Collections
 const questionsRef = collection(db, "allQuestions");
@@ -301,4 +301,55 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     const stats = { totalAnswered, totalCorrect, accuracy, recentResults, categoryStats };
     cachedUserStats[userId] = { stats, time: Date.now() };
     return stats;
+}
+
+// --- Mock Tests ---
+
+const mockTestsRef = collection(db, "mockTests");
+const mockTestResultsRef = collection(db, "mockTestResults");
+
+export async function createMockTest(test: MockTest) {
+    const { id, ...data } = test;
+    const docRef = await addDoc(mockTestsRef, data);
+    return docRef.id;
+}
+
+export async function getMockTest(id: string) {
+    const snapshot = await getDoc(doc(db, "mockTests", id));
+    if (snapshot.exists()) return { id: snapshot.id, ...snapshot.data() } as MockTest;
+    return null;
+}
+
+export async function getAvailableMockTests(userId: string) {
+    const q = query(mockTestsRef, where("targetUserIds", "array-contains", userId), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MockTest));
+}
+
+export async function getAllMockTests() {
+    const q = query(mockTestsRef, orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MockTest));
+}
+
+export async function saveMockTestResult(result: MockTestResult) {
+    const { id, ...data } = result;
+    const docRef = await addDoc(mockTestResultsRef, data);
+    return docRef.id;
+}
+
+export async function getMockTestResult(testId: string, userId: string) {
+    const q = query(mockTestResultsRef, where("testId", "==", testId), where("userId", "==", userId), limit(1));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as MockTestResult;
+    }
+    return null;
+}
+
+// Admin helper to get user list for assignment
+export async function getAllUsers() {
+    const usersRef = collection(db, "users");
+    const snapshot = await getDocs(usersRef);
+    return snapshot.docs.map(d => d.data());
 }

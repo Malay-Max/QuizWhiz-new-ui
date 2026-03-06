@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Sparkles, Layers, BookOpen, BrainCircuit, LogOut, ShieldCheck } from "lucide-react";
+import { Home, Sparkles, Layers, BookOpen, BrainCircuit, LogOut, ShieldCheck, FileText, ClipboardList } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { logoutUser } from "@/lib/auth";
 
@@ -16,18 +16,20 @@ export function Sidebar() {
     const baseNavItems = [
         { name: "Home", href: "/", icon: Home },
         { name: "Review", href: "/review", icon: Layers },
+        { name: "Mock Tests", href: "/mock-tests", icon: FileText },
     ];
 
     // Admin-only nav items
     const adminNavItems = [
         { name: "Generate", href: "/generate-questions", icon: Sparkles },
         { name: "Manage", href: "/quiz/manage", icon: BookOpen },
+        { name: "Manage Tests", href: "/mock-tests/manage", icon: ClipboardList },
     ];
 
     // Manage questions is visible to everyone (for reading), but we show the full item for admins
     // and a read-only version for regular users (quiz browsing)
     const navItems = isAdmin
-        ? [baseNavItems[0], ...adminNavItems, baseNavItems[1]]
+        ? [baseNavItems[0], ...adminNavItems, baseNavItems[1], baseNavItems[2]]
         : [
             ...baseNavItems,
             { name: "Question Bank", href: "/quiz/manage", icon: BookOpen }, // read-only
