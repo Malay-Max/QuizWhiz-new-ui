@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { useGoal } from "@/contexts/goal-context";
 import { getUserStats, UserStats } from "@/lib/db";
 import { PlayCircle, Target, CheckCircle2, TrendingUp, Flame, BookOpen } from "lucide-react";
 import Link from "next/link";
@@ -27,16 +28,18 @@ function StatCard({ label, value, sub, icon: Icon, color }: {
 
 export default function DashboardPage() {
     const { user, userDoc } = useAuth();
+    const { activeGoalId } = useGoal();
     const [stats, setStats] = useState<UserStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         if (!user) return;
-        getUserStats(user.uid)
+        setIsLoading(true);
+        getUserStats(user.uid, activeGoalId ?? undefined)
             .then(setStats)
             .catch(console.error)
             .finally(() => setIsLoading(false));
-    }, [user]);
+    }, [user, activeGoalId]);
 
     const displayName = userDoc?.displayUsername ?? "Scholar";
     const maxBar = stats ? Math.max(...stats.recentResults.map(r => r.total), 1) : 1;

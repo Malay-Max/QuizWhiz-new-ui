@@ -250,6 +250,12 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
                                 )}
                             </div>
 
+                            {currentQuestion.source && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                    {currentQuestion.source}
+                                </span>
+                            )}
+
                             <p className="text-white text-lg font-medium leading-relaxed">
                                 {currentQuestion.text}
                             </p>

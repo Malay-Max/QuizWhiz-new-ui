@@ -7,10 +7,12 @@ import { Layers, BookOpen, Folder, Play, CheckSquare, Square } from "lucide-reac
 import Link from "next/link";
 import { getDueQuestions, getCategories } from "@/lib/db";
 import { useAuth } from "@/contexts/auth-context";
+import { useGoal } from "@/contexts/goal-context";
 import { cn } from "@/lib/utils";
 
 export default function ReviewPage() {
     const { user, isLoading: authLoading } = useAuth();
+    const { activeGoalId } = useGoal();
     const [questions, setQuestions] = useState<Question[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -22,9 +24,10 @@ export default function ReviewPage() {
         if (authLoading) return;
         if (!user) { setIsLoading(false); return; }
 
+        setIsLoading(true);
         Promise.all([
-            getDueQuestions(user.uid),
-            getCategories()
+            getDueQuestions(user.uid, activeGoalId ?? undefined),
+            getCategories(activeGoalId ?? undefined)
         ])
             .then(([dueQs, cats]) => {
                 setQuestions(dueQs);
@@ -36,7 +39,7 @@ export default function ReviewPage() {
             })
             .catch(console.error)
             .finally(() => setIsLoading(false));
-    }, [user, authLoading]);
+    }, [user, authLoading, activeGoalId]);
 
     // Group due questions by category
     const groupedDue = useMemo(() => {

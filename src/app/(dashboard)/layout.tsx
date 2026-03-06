@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
+import { GoalProvider } from "@/contexts/goal-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Loader2 } from "lucide-react";
@@ -32,20 +33,22 @@ export default function DashboardLayout({
     if (!user) return null; // redirecting
 
     return (
-        <div className="flex h-screen overflow-hidden bg-background-light dark:bg-background-dark">
-            <div className="hidden md:flex">
-                <Sidebar />
-            </div>
-            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-                <div className="md:hidden p-4 border-b border-surface-border flex items-center justify-between bg-background-dark">
-                    <span className="font-bold text-white">QuizWhiz</span>
-                    <MobileNav />
+        <GoalProvider>
+            <div className="flex h-screen overflow-hidden bg-background-light dark:bg-background-dark">
+                <div className="hidden md:flex">
+                    <Sidebar />
                 </div>
-                {children}
-                <footer className="flex-shrink-0 py-2 px-6 border-t border-[#1c2127] text-center text-[11px] text-[#9dabb9]/50 hidden md:block">
-                    Created by Malay Layek
-                </footer>
+                <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                    <div className="md:hidden p-4 border-b border-surface-border flex items-center justify-between bg-background-dark">
+                        <span className="font-bold text-white">QuizWhiz</span>
+                        <MobileNav />
+                    </div>
+                    {children}
+                    <footer className="flex-shrink-0 py-2 px-6 border-t border-[#1c2127] text-center text-[11px] text-[#9dabb9]/50 hidden md:block">
+                        Created by Malay Layek
+                    </footer>
+                </div>
             </div>
-        </div>
+        </GoalProvider>
     );
 }

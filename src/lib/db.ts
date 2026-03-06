@@ -12,15 +12,47 @@ import {
     serverTimestamp,
     orderBy,
     limit,
+    arrayUnion,
+    arrayRemove,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Question, Category, UserProgress, MockTest, MockTestResult } from "./schemas";
+import { Question, Category, UserProgress, MockTest, MockTestResult, Goal } from "./schemas";
 
 // Collections
 const questionsRef = collection(db, "allQuestions");
 const categoriesRef = collection(db, "categories");
 const progressRef = collection(db, "userProgress");
 const quizResultsRef = collection(db, "quizResults");
+const goalsRef = collection(db, "goals");
+
+// --- Goals ---
+
+export async function createGoal(goal: Goal) {
+    const { id, ...data } = goal;
+    const docRef = await addDoc(goalsRef, data);
+    return docRef.id;
+}
+
+export async function getGoals() {
+    const snapshot = await getDocs(goalsRef);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Goal));
+}
+
+export async function getGoal(id: string) {
+    const snapshot = await getDoc(doc(db, "goals", id));
+    if (snapshot.exists()) return { id: snapshot.id, ...snapshot.data() } as Goal;
+    return null;
+}
+
+export async function assignGoalToUser(userId: string, goalId: string) {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, { assignedGoalIds: arrayUnion(goalId) });
+}
+
+export async function removeGoalFromUser(userId: string, goalId: string) {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, { assignedGoalIds: arrayRemove(goalId) });
+}
 
 // --- Questions ---
 
@@ -58,14 +90,50 @@ export async function deleteQuestion(id: string) {
 
 export async function addCategory(category: Category) {
     const { id, ...data } = category;
-    const docRef = await addDoc(categoriesRef, data);
+    // Firestore rejects undefined values — strip them
+    const cleanData = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+    const docRef = await addDoc(categoriesRef, cleanData);
     return docRef.id;
 }
 
-export async function getCategories() {
-    // Basic memory cache to prevent excessive reads during navigation (not ideal for multi-user real-time edits, but fine for this app)
+export async function getCategories(goalId?: string) {
+    // Always fetch all categories — it's a small collection
     const snapshot = await getDocs(categoriesRef);
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Category));
+    const allCats = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Category));
+
+    if (!goalId) return allCats;
+
+    // Find root categories that have this goalId, then include their entire subtree
+    const rootsWithGoal = allCats.filter(c => c.goalIds?.includes(goalId));
+    if (rootsWithGoal.length === 0) return [];
+
+    // Recursively collect all descendant IDs
+    const collectSubtree = (parentId: string): string[] => {
+        const ids = [parentId];
+        for (const child of allCats.filter(c => c.parentId === parentId)) {
+            ids.push(...collectSubtree(child.id!));
+        }
+        return ids;
+    };
+
+    const includedIds = new Set<string>();
+    for (const root of rootsWithGoal) {
+        for (const id of collectSubtree(root.id!)) {
+            includedIds.add(id);
+        }
+    }
+
+    return allCats.filter(c => includedIds.has(c.id!));
+}
+
+export async function assignCategoryToGoal(categoryId: string, goalId: string) {
+    const catRef = doc(db, "categories", categoryId);
+    await updateDoc(catRef, { goalIds: arrayUnion(goalId) });
+}
+
+export async function removeCategoryFromGoal(categoryId: string, goalId: string) {
+    const catRef = doc(db, "categories", categoryId);
+    await updateDoc(catRef, { goalIds: arrayRemove(goalId) });
 }
 
 // Get questions only matching specific category IDs (up to 30 due to Firestore 'in' limit)
@@ -110,6 +178,7 @@ export async function upsertUserProgress(
     questionId: string,
     categoryId: string,
     rating: SRSRating,
+    goalId?: string,
 ): Promise<void> {
     // Fetch the existing doc to get current interval/easeFactor/consecutiveCorrect
     const docId = `${userId}_${questionId}`;
@@ -158,6 +227,7 @@ export async function upsertUserProgress(
         userId,
         questionId,
         categoryId,
+        goalId: goalId ?? null,
         easeFactor: newEF,
         interval: newInterval,
         consecutiveCorrect: newConsecutive,
@@ -183,9 +253,13 @@ export async function createUserProgress(progress: UserProgress) {
     return docRef.id;
 }
 
-export async function getDueQuestions(userId: string) {
+export async function getDueQuestions(userId: string, goalId?: string) {
     const now = Date.now();
-    const q = query(progressRef, where("userId", "==", userId), where("nextReviewDate", "<=", now));
+    let constraints = [where("userId", "==", userId), where("nextReviewDate", "<=", now)];
+    if (goalId) {
+        constraints.push(where("goalId", "==", goalId));
+    }
+    const q = query(progressRef, ...constraints);
     const snapshot = await getDocs(q);
     const progressItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as unknown as UserProgress));
 
@@ -217,6 +291,7 @@ export interface QuizResult {
     questionId: string;
     categoryId: string;
     categoryName?: string;
+    goalId?: string;
     isCorrect: boolean;
     answeredAt: unknown;
 }
@@ -227,16 +302,18 @@ export async function saveQuizResult(
     categoryId: string,
     isCorrect: boolean,
     categoryName?: string,
+    goalId?: string,
 ) {
     await addDoc(quizResultsRef, {
         userId,
         questionId,
         categoryId,
         categoryName: categoryName ?? "",
+        goalId: goalId ?? null,
         isCorrect,
         answeredAt: serverTimestamp(),
     });
-    delete cachedUserStats[userId];
+    delete cachedUserStats[`${userId}_${goalId ?? "all"}`];
 }
 
 export interface UserStats {
@@ -249,19 +326,25 @@ export interface UserStats {
 
 let cachedUserStats: Record<string, { stats: UserStats, time: number }> = {};
 
-export async function getUserStats(userId: string): Promise<UserStats> {
-    // 5-minute cache per user
-    if (cachedUserStats[userId] && Date.now() - cachedUserStats[userId].time < 5 * 60 * 1000) {
-        return cachedUserStats[userId].stats;
+export async function getUserStats(userId: string, goalId?: string): Promise<UserStats> {
+    const cacheKey = `${userId}_${goalId ?? "all"}`;
+
+    // 5-minute cache per user+goal
+    if (cachedUserStats[cacheKey] && Date.now() - cachedUserStats[cacheKey].time < 5 * 60 * 1000) {
+        return cachedUserStats[cacheKey].stats;
     }
 
-    const q = query(quizResultsRef, where("userId", "==", userId), orderBy("answeredAt", "desc"), limit(500));
+    let constraints: any[] = [where("userId", "==", userId)];
+    if (goalId) {
+        constraints.push(where("goalId", "==", goalId));
+    }
+    const q = query(quizResultsRef, ...constraints, orderBy("answeredAt", "desc"), limit(500));
     const snapshot = await getDocs(q);
     const results = snapshot.docs.map(d => d.data() as QuizResult);
 
     if (results.length === 0) {
         const empty = { totalAnswered: 0, totalCorrect: 0, accuracy: 0, recentResults: [], categoryStats: [] };
-        cachedUserStats[userId] = { stats: empty, time: Date.now() };
+        cachedUserStats[cacheKey] = { stats: empty, time: Date.now() };
         return empty;
     }
 
@@ -299,7 +382,7 @@ export async function getUserStats(userId: string): Promise<UserStats> {
         .slice(0, 8);
 
     const stats = { totalAnswered, totalCorrect, accuracy, recentResults, categoryStats };
-    cachedUserStats[userId] = { stats, time: Date.now() };
+    cachedUserStats[cacheKey] = { stats, time: Date.now() };
     return stats;
 }
 
@@ -320,14 +403,22 @@ export async function getMockTest(id: string) {
     return null;
 }
 
-export async function getAvailableMockTests(userId: string) {
-    const q = query(mockTestsRef, where("targetUserIds", "array-contains", userId), orderBy("createdAt", "desc"));
+export async function getAvailableMockTests(userId: string, goalId?: string) {
+    let constraints: any[] = [where("targetUserIds", "array-contains", userId)];
+    if (goalId) {
+        constraints.push(where("goalId", "==", goalId));
+    }
+    const q = query(mockTestsRef, ...constraints, orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MockTest));
 }
 
-export async function getAllMockTests() {
-    const q = query(mockTestsRef, orderBy("createdAt", "desc"));
+export async function getAllMockTests(goalId?: string) {
+    let constraints: any[] = [];
+    if (goalId) {
+        constraints.push(where("goalId", "==", goalId));
+    }
+    const q = query(mockTestsRef, ...constraints, orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MockTest));
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { useGoal } from "@/contexts/goal-context";
 import { getAvailableMockTests, getMockTestResult, getAllMockTests } from "@/lib/db";
 import { MockTest, MockTestResult } from "@/lib/schemas";
 import { useRouter } from "next/navigation";
@@ -14,18 +15,20 @@ interface TestWithResult extends MockTest {
 
 export default function MockTestsPage() {
     const { user, isAdmin } = useAuth();
+    const { activeGoalId } = useGoal();
     const router = useRouter();
     const [tests, setTests] = useState<TestWithResult[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         if (!user) return;
+        setIsLoading(true);
         (async () => {
             try {
                 // Admins see all tests, users see only assigned tests
                 const rawTests = isAdmin
-                    ? await getAllMockTests()
-                    : await getAvailableMockTests(user.uid);
+                    ? await getAllMockTests(activeGoalId ?? undefined)
+                    : await getAvailableMockTests(user.uid, activeGoalId ?? undefined);
 
                 // For each test, check if the user has already submitted
                 const withResults: TestWithResult[] = await Promise.all(
@@ -41,7 +44,7 @@ export default function MockTestsPage() {
                 setIsLoading(false);
             }
         })();
-    }, [user, isAdmin]);
+    }, [user, isAdmin, activeGoalId]);
 
     if (isLoading) {
         return (

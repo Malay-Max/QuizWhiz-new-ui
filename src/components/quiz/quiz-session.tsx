@@ -9,6 +9,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { saveQuizResult, upsertUserProgress, getCategories, type SRSRating } from "@/lib/db";
 import { useAuth } from "@/contexts/auth-context";
+import { useGoal } from "@/contexts/goal-context";
 
 interface QuizSessionProps {
     questions: Question[];
@@ -17,6 +18,7 @@ interface QuizSessionProps {
 
 export default function QuizSession({ questions, categoryName = "General Quiz" }: QuizSessionProps) {
     const { user } = useAuth();
+    const { activeGoalId } = useGoal();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [showFeedback, setShowFeedback] = useState(false);
@@ -34,13 +36,13 @@ export default function QuizSession({ questions, categoryName = "General Quiz" }
         if (catNameCache[categoryId]) return catNameCache[categoryId];
         if (categoryName && categoryId === currentQuestion?.categoryId) return categoryName;
         try {
-            const cats = await getCategories();
+            const cats = await getCategories(activeGoalId ?? undefined);
             const found = cats.find(c => c.id === categoryId || c.name === categoryId);
             const name = found?.name ?? categoryId;
             setCatNameCache(prev => ({ ...prev, [categoryId]: name }));
             return name;
         } catch { return categoryId; }
-    }, [catNameCache, categoryName, currentQuestion?.categoryId]);
+    }, [catNameCache, categoryName, currentQuestion?.categoryId, activeGoalId]);
 
     // Auto-advance via useEffect chain
     useEffect(() => {
@@ -78,8 +80,8 @@ export default function QuizSession({ questions, categoryName = "General Quiz" }
     const recordResult = useCallback(async (q: Question, isCorrect: boolean) => {
         if (!user) return;
         const catName = await getCatName(q.categoryId);
-        await saveQuizResult(user.uid, q.id!, q.categoryId, isCorrect, catName).catch(console.error);
-    }, [user, getCatName]);
+        await saveQuizResult(user.uid, q.id!, q.categoryId, isCorrect, catName, activeGoalId ?? undefined).catch(console.error);
+    }, [user, getCatName, activeGoalId]);
 
     const handleAnswer = (optionId: string) => {
         cancelAutoAdvance();
@@ -102,7 +104,7 @@ export default function QuizSession({ questions, categoryName = "General Quiz" }
     const handleConfidence = (rating: SRSRating) => {
         // Write SRS progress asynchronously — don't block navigation
         if (user && currentQuestion?.id) {
-            upsertUserProgress(user.uid, currentQuestion.id, currentQuestion.categoryId, rating)
+            upsertUserProgress(user.uid, currentQuestion.id, currentQuestion.categoryId, rating, activeGoalId ?? undefined)
                 .catch(console.error);
         }
         goNext();

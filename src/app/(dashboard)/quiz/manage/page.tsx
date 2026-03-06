@@ -24,12 +24,14 @@ import { Question, Category } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 import { EditQuestionModal } from "@/components/quiz/edit-question-modal";
 import { useAuth } from "@/contexts/auth-context";
+import { useGoal } from "@/contexts/goal-context";
 import Link from "next/link";
 
 type BreadcrumbItem = { id: string | null; name: string };
 
 export default function ManagePage() {
     const { isAdmin } = useAuth();
+    const { activeGoalId } = useGoal();
 
     // Only categories are fetched on mount — never the full question set
     const [categories, setCategories] = useState<Category[]>([]);
@@ -45,13 +47,14 @@ export default function ManagePage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
 
-    // Fetch categories once on mount
+    // Fetch categories once on mount (scoped to active goal)
     useEffect(() => {
-        getCategories()
+        setIsCatsLoading(true);
+        getCategories(activeGoalId ?? undefined)
             .then(setCategories)
             .catch(console.error)
             .finally(() => setIsCatsLoading(false));
-    }, []);
+    }, [activeGoalId]);
 
     const currentSubcategories = useMemo(() =>
         categories.filter(c =>

@@ -5,12 +5,14 @@ import { getCategories, getAllUsers } from "@/lib/db";
 import { Category } from "@/lib/schemas";
 import { createMockTestAction } from "@/app/actions/mock-test-actions";
 import { useAuth, UserDoc } from "@/contexts/auth-context";
+import { useGoal } from "@/contexts/goal-context";
 import { Loader2, Plus, Users, Folder, Clock, CheckSquare, Square, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 export default function ManageMockTestsPage() {
     const { user, isAdmin } = useAuth();
+    const { activeGoalId } = useGoal();
     const router = useRouter();
 
     const [categories, setCategories] = useState<Category[]>([]);
@@ -31,14 +33,15 @@ export default function ManageMockTestsPage() {
 
     useEffect(() => {
         if (!isAdmin) return;
-        Promise.all([getCategories(), getAllUsers()])
+        setIsLoading(true);
+        Promise.all([getCategories(activeGoalId ?? undefined), getAllUsers()])
             .then(([cats, allUsers]) => {
                 setCategories(cats);
                 setUsers(allUsers as UserDoc[]);
             })
             .catch(console.error)
             .finally(() => setIsLoading(false));
-    }, [isAdmin]);
+    }, [isAdmin, activeGoalId]);
 
     if (!isAdmin) {
         return (
@@ -90,7 +93,8 @@ export default function ManageMockTestsPage() {
                 numQuestions,
                 Array.from(selectedCategories),
                 Array.from(selectedUsers),
-                user!.uid
+                user!.uid,
+                activeGoalId ?? undefined
             );
             setSuccess(true);
             setTitle("");

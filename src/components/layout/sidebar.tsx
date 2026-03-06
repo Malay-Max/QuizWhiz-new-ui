@@ -3,14 +3,18 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Sparkles, Layers, BookOpen, BrainCircuit, LogOut, ShieldCheck, FileText, ClipboardList } from "lucide-react";
+import { Home, Sparkles, Layers, BookOpen, BrainCircuit, LogOut, ShieldCheck, FileText, ClipboardList, Target, ChevronDown, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { useGoal } from "@/contexts/goal-context";
 import { logoutUser } from "@/lib/auth";
+import { useState } from "react";
 
 export function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
     const { userDoc, isAdmin } = useAuth();
+    const { goals, activeGoalId, activeGoal, setActiveGoalId, isLoading: goalsLoading } = useGoal();
+    const [goalDropdownOpen, setGoalDropdownOpen] = useState(false);
 
     // Base nav for all users
     const baseNavItems = [
@@ -24,15 +28,14 @@ export function Sidebar() {
         { name: "Generate", href: "/generate-questions", icon: Sparkles },
         { name: "Manage", href: "/quiz/manage", icon: BookOpen },
         { name: "Manage Tests", href: "/mock-tests/manage", icon: ClipboardList },
+        { name: "Manage Goals", href: "/goals/manage", icon: Settings },
     ];
 
-    // Manage questions is visible to everyone (for reading), but we show the full item for admins
-    // and a read-only version for regular users (quiz browsing)
     const navItems = isAdmin
         ? [baseNavItems[0], ...adminNavItems, baseNavItems[1], baseNavItems[2]]
         : [
             ...baseNavItems,
-            { name: "Question Bank", href: "/quiz/manage", icon: BookOpen }, // read-only
+            { name: "Question Bank", href: "/quiz/manage", icon: BookOpen },
         ];
 
     const handleLogout = async () => {
@@ -42,7 +45,7 @@ export function Sidebar() {
 
     return (
         <aside className="w-64 h-full bg-[#111418] border-r border-[#283039] flex flex-col justify-between shrink-0">
-            <div className="p-4 flex flex-col gap-6">
+            <div className="p-4 flex flex-col gap-4">
                 {/* Brand */}
                 <div className="flex items-center gap-3 px-2">
                     <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/20 text-primary">
@@ -53,6 +56,55 @@ export function Sidebar() {
                         <p className="text-[#9dabb9] text-xs">A Malay Layek Creation</p>
                     </div>
                 </div>
+
+                {/* Goal Switcher */}
+                {goals.length > 0 && (
+                    <div className="relative">
+                        <button
+                            onClick={() => setGoalDropdownOpen(!goalDropdownOpen)}
+                            className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-[#1c2127] border border-[#283039] rounded-xl text-left hover:border-primary/40 transition-colors"
+                        >
+                            <div className="flex items-center gap-2 min-w-0">
+                                <Target className="w-4 h-4 text-primary shrink-0" />
+                                <span className="text-sm font-medium text-white truncate">
+                                    {activeGoal?.name ?? "Select Goal"}
+                                </span>
+                            </div>
+                            <ChevronDown className={cn("w-4 h-4 text-[#9dabb9] shrink-0 transition-transform", goalDropdownOpen && "rotate-180")} />
+                        </button>
+
+                        {goalDropdownOpen && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setGoalDropdownOpen(false)} />
+                                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#1c2127] border border-[#283039] rounded-xl shadow-2xl max-h-48 overflow-y-auto">
+                                    {goals.map(goal => (
+                                        <button
+                                            key={goal.id}
+                                            onClick={() => {
+                                                setActiveGoalId(goal.id!);
+                                                setGoalDropdownOpen(false);
+                                            }}
+                                            className={cn(
+                                                "w-full px-4 py-2.5 text-left text-sm transition-colors",
+                                                goal.id === activeGoalId
+                                                    ? "bg-primary/10 text-primary font-medium"
+                                                    : "text-[#9dabb9] hover:bg-[#283039] hover:text-white"
+                                            )}
+                                        >
+                                            {goal.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+
+                {goals.length === 0 && !goalsLoading && (
+                    <div className="px-3 py-2 text-xs text-[#9dabb9]/60 italic">
+                        No goals assigned yet.
+                    </div>
+                )}
 
                 {/* Navigation */}
                 <nav className="flex flex-col gap-2">

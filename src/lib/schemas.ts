@@ -25,11 +25,13 @@ export const CategorySchema = z.object({
     name: z.string().min(2, "Category name must be at least 2 characters"),
     parentId: z.string().optional(),
     description: z.string().optional(),
+    goalIds: z.array(z.string()).optional(), // Categories can belong to multiple goals
 });
 
 export const UserProgressSchema = z.object({
     userId: z.string(),
     questionId: z.string(),
+    goalId: z.string().optional(),
     easeFactor: z.number().default(2.5),
     interval: z.number().default(0), // in days
     nextReviewDate: z.number(), // timestamp
@@ -43,6 +45,18 @@ export type Question = z.infer<typeof QuestionSchema>;
 export type Category = z.infer<typeof CategorySchema>;
 export type UserProgress = z.infer<typeof UserProgressSchema>;
 
+// --- Goals ---
+
+export const GoalSchema = z.object({
+    id: z.string().optional(),
+    name: z.string().min(2, "Goal name must be at least 2 characters"),
+    description: z.string().optional(),
+    createdBy: z.string(), // Admin UID
+    createdAt: z.number(),
+});
+
+export type Goal = z.infer<typeof GoalSchema>;
+
 // --- Mock Tests ---
 
 export const MockTestSchema = z.object({
@@ -53,6 +67,7 @@ export const MockTestSchema = z.object({
     categoryIds: z.array(z.string()).min(1, "Select at least one category"),
     targetUserIds: z.array(z.string()), // Target specific users
     questionIds: z.array(z.string()), // The specific random question IDs for this test
+    goalId: z.string().optional(), // Scopes mock test to a specific goal
     createdAt: z.number(),
     createdBy: z.string(), // Admin UID who created it
 });

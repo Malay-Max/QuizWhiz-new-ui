@@ -9,7 +9,8 @@ export async function createMockTestAction(
     numQuestions: number,
     categoryIds: string[],
     targetUserIds: string[],
-    adminUid: string
+    adminUid: string,
+    goalId?: string
 ): Promise<string> {
     if (!title || durationMinutes < 1 || numQuestions < 1 || categoryIds.length === 0) {
         throw new Error("Invalid mock test parameters provided.");
@@ -36,6 +37,7 @@ export async function createMockTestAction(
         categoryIds,
         targetUserIds,
         questionIds: selectedIds,
+        goalId: goalId ?? undefined,
         createdAt: Date.now(),
         createdBy: adminUid
     };
