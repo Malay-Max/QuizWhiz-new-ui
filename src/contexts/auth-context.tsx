@@ -45,10 +45,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             if (firebaseUser) {
                 // Use onSnapshot so role changes in console reflect immediately
-                unsubscribeDoc = onSnapshot(doc(db, "users", firebaseUser.uid), (snap) => {
-                    setUserDoc(snap.exists() ? (snap.data() as UserDoc) : null);
-                    setIsLoading(false);
-                });
+                unsubscribeDoc = onSnapshot(doc(db, "users", firebaseUser.uid), 
+                    (snap) => {
+                        setUserDoc(snap.exists() ? (snap.data() as UserDoc) : null);
+                        setIsLoading(false);
+                    },
+                    (error) => {
+                        console.error("Firestore onSnapshot error in AuthContext:", error);
+                        // Prevent the app from hanging forever if Firestore fails
+                        setIsLoading(false);
+                    }
+                );
             } else {
                 setUserDoc(null);
                 setIsLoading(false);
