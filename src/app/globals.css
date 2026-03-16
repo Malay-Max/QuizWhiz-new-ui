@@ -5,22 +5,18 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --font-lexend: 'Lexend', sans-serif;
-    --font-noto: 'Noto Sans', sans-serif;
-  }
-  
   body {
-    @apply bg-background-light dark:bg-background-dark text-slate-900 dark:text-text-main font-display antialiased;
+    @apply dark:bg-background-dark dark:text-text-main font-display antialiased bg-background-light text-[#111418];
   }
 }
 
 @layer utilities {
-    .scrollbar-hide::-webkit-scrollbar {
-        display: none;
-    }
-    .scrollbar-hide {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-    }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }

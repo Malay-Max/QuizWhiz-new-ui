@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Sparkles, Layers, BookOpen, BrainCircuit, LogOut, ShieldCheck, FileText, ClipboardList, Target, ChevronDown, Settings } from "lucide-react";
+import { Home, Sparkles, Layers, BookOpen, BrainCircuit, LogOut, ShieldCheck, FileText, ClipboardList, Target, ChevronDown, Settings, Activity } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useGoal } from "@/contexts/goal-context";
 import { logoutUser } from "@/lib/auth";
@@ -15,6 +15,7 @@ export function Sidebar() {
     const { userDoc, isAdmin } = useAuth();
     const { goals, activeGoalId, activeGoal, setActiveGoalId, isLoading: goalsLoading } = useGoal();
     const [goalDropdownOpen, setGoalDropdownOpen] = useState(false);
+    const [manageDropdownOpen, setManageDropdownOpen] = useState(() => pathname.includes('/manage'));
 
     // Base nav for all users
     const baseNavItems = [
@@ -26,9 +27,17 @@ export function Sidebar() {
     // Admin-only nav items
     const adminNavItems = [
         { name: "Generate", href: "/generate-questions", icon: Sparkles },
-        { name: "Manage", href: "/quiz/manage", icon: BookOpen },
-        { name: "Manage Tests", href: "/mock-tests/manage", icon: ClipboardList },
-        { name: "Manage Goals", href: "/goals/manage", icon: Settings },
+        {
+            name: "Manage",
+            href: "#",
+            icon: Settings,
+            children: [
+                { name: "Questions", href: "/quiz/manage", icon: BookOpen },
+                { name: "Tests", href: "/mock-tests/manage", icon: ClipboardList },
+                { name: "Goals", href: "/goals/manage", icon: Target },
+                { name: "Analytics", href: "/analytics", icon: Activity },
+            ]
+        },
     ];
 
     const navItems = isAdmin
@@ -108,7 +117,49 @@ export function Sidebar() {
 
                 {/* Navigation */}
                 <nav className="flex flex-col gap-2">
-                    {navItems.map((item) => {
+                    {navItems.map((item: any) => {
+                        if (item.children) {
+                            const isActive = item.children.some((child: any) => pathname === child.href);
+                            return (
+                                <div key={item.name} className="flex flex-col gap-1">
+                                    <button
+                                        onClick={() => setManageDropdownOpen(!manageDropdownOpen)}
+                                        className={cn(
+                                            "flex items-center justify-between w-full px-3 py-2.5 rounded-lg transition-colors",
+                                            isActive && !manageDropdownOpen ? "bg-primary/10 text-primary" : "text-[#9dabb9] hover:bg-[#283039] hover:text-white"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <item.icon className="w-5 h-5" />
+                                            <span className="text-sm font-medium">{item.name}</span>
+                                        </div>
+                                        <ChevronDown className={cn("w-4 h-4 transition-transform", manageDropdownOpen && "rotate-180")} />
+                                    </button>
+
+                                    {manageDropdownOpen && (
+                                        <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-[#283039] ml-4">
+                                            {item.children.map((child: any) => {
+                                                const isChildActive = pathname === child.href;
+                                                return (
+                                                    <Link
+                                                        key={child.href}
+                                                        href={child.href}
+                                                        className={cn(
+                                                            "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                                                            isChildActive ? "bg-primary/10 text-primary" : "text-[#9dabb9] hover:bg-[#283039] hover:text-white"
+                                                        )}
+                                                    >
+                                                        <child.icon className="w-4 h-4" />
+                                                        <span className="text-sm font-medium">{child.name}</span>
+                                                    </Link>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        }
+
                         const isActive = pathname === item.href;
                         return (
                             <Link

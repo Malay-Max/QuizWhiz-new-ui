@@ -37,7 +37,7 @@ export default function ManageMockTestsPage() {
         Promise.all([getCategories(activeGoalId ?? undefined), getAllUsers()])
             .then(([cats, allUsers]) => {
                 setCategories(cats);
-                setUsers(allUsers as UserDoc[]);
+                setUsers(allUsers as any as UserDoc[]);
             })
             .catch(console.error)
             .finally(() => setIsLoading(false));

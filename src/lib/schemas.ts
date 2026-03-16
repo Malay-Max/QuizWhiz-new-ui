@@ -45,6 +45,16 @@ export type Question = z.infer<typeof QuestionSchema>;
 export type Category = z.infer<typeof CategorySchema>;
 export type UserProgress = z.infer<typeof UserProgressSchema>;
 
+export const UserActivitySchema = z.object({
+    id: z.string().optional(),
+    userId: z.string(),
+    date: z.string(), // YYYY-MM-DD format
+    totalSeconds: z.number().default(0),
+    lastActiveAt: z.number(),
+});
+
+export type UserActivity = z.infer<typeof UserActivitySchema>;
+
 // --- Goals ---
 
 export const GoalSchema = z.object({

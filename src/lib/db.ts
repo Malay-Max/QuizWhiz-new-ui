@@ -16,7 +16,7 @@ import {
     arrayRemove,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { Question, Category, UserProgress, MockTest, MockTestResult, Goal } from "./schemas";
+import { Question, Category, UserProgress, MockTest, MockTestResult, Goal, UserActivity } from "./schemas";
 
 // Collections
 const questionsRef = collection(db, "allQuestions");
@@ -24,6 +24,7 @@ const categoriesRef = collection(db, "categories");
 const progressRef = collection(db, "userProgress");
 const quizResultsRef = collection(db, "quizResults");
 const goalsRef = collection(db, "goals");
+const userActivityRef = collection(db, "userActivity");
 
 // --- Goals ---
 
@@ -442,5 +443,59 @@ export async function getMockTestResult(testId: string, userId: string) {
 export async function getAllUsers() {
     const usersRef = collection(db, "users");
     const snapshot = await getDocs(usersRef);
-    return snapshot.docs.map(d => d.data());
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 }
+
+// --- Activity Tracking ---
+
+export async function logUserActivity(userId: string, activeSeconds: number) {
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const docId = `${userId}_${today}`;
+    const docRef = doc(db, "userActivity", docId);
+
+    const snapshot = await getDoc(docRef);
+    if (snapshot.exists()) {
+        await updateDoc(docRef, {
+            totalSeconds: (snapshot.data().totalSeconds || 0) + activeSeconds,
+            lastActiveAt: Date.now(),
+        });
+    } else {
+        await setDoc(docRef, {
+            userId,
+            date: today,
+            totalSeconds: activeSeconds,
+            lastActiveAt: Date.now(),
+        });
+    }
+}
+
+export async function getUserActivityHistory(userId: string, days: number = 7) {
+    const now = new Date();
+    const dates: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().split("T")[0]);
+    }
+
+    const activities: Record<string, number> = {};
+    for (const d of dates) {
+        activities[d] = 0;
+    }
+
+    if (dates.length > 0) {
+        // Fetch in batches of 30 if needed, but usually 7 days is fine
+        for (let i = 0; i < dates.length; i += 30) {
+            const chunk = dates.slice(i, i + 30);
+            const q = query(userActivityRef, where("userId", "==", userId), where("date", "in", chunk));
+            const snapshot = await getDocs(q);
+            snapshot.docs.forEach(doc => {
+                const data = doc.data() as UserActivity;
+                activities[data.date] = data.totalSeconds;
+            });
+        }
+    }
+
+    return Object.entries(activities).map(([date, totalSeconds]) => ({ date, totalSeconds }));
+}
+
