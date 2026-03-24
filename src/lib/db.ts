@@ -409,9 +409,17 @@ export async function getAvailableMockTests(userId: string, goalId?: string) {
     if (goalId) {
         constraints.push(where("goalId", "==", goalId));
     }
-    const q = query(mockTestsRef, ...constraints, orderBy("createdAt", "desc"));
+    // We remove orderBy("createdAt", "desc") to prevent requiring a Firestore composite index.
+    const q = query(mockTestsRef, ...constraints);
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MockTest));
+    const tests = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MockTest));
+    
+    // Sort manually in JS (newest first)
+    return tests.sort((a, b) => {
+        const aTime = typeof a.createdAt === 'number' ? a.createdAt : (a.createdAt as any)?.toMillis?.() || 0;
+        const bTime = typeof b.createdAt === 'number' ? b.createdAt : (b.createdAt as any)?.toMillis?.() || 0;
+        return bTime - aTime;
+    });
 }
 
 export async function getAllMockTests(goalId?: string) {
@@ -419,9 +427,16 @@ export async function getAllMockTests(goalId?: string) {
     if (goalId) {
         constraints.push(where("goalId", "==", goalId));
     }
-    const q = query(mockTestsRef, ...constraints, orderBy("createdAt", "desc"));
+    const q = query(mockTestsRef, ...constraints);
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MockTest));
+    const tests = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MockTest));
+    
+    // Sort manually in JS (newest first)
+    return tests.sort((a, b) => {
+        const aTime = typeof a.createdAt === 'number' ? a.createdAt : (a.createdAt as any)?.toMillis?.() || 0;
+        const bTime = typeof b.createdAt === 'number' ? b.createdAt : (b.createdAt as any)?.toMillis?.() || 0;
+        return bTime - aTime;
+    });
 }
 
 export async function saveMockTestResult(result: MockTestResult) {
