@@ -1,6 +1,6 @@
 "use server";
 
-import { getQuestionsInCategories, createMockTest } from "@/lib/db";
+import { getQuestionsInCategories, createMockTest, updateMockTest, deleteMockTest } from "@/lib/db";
 import { MockTest } from "@/lib/schemas";
 
 export async function createMockTestAction(
@@ -20,7 +20,6 @@ export async function createMockTestAction(
     const availableQuestions = await getQuestionsInCategories(categoryIds);
 
     // 2. Shuffle and pick random questions up to numQuestions
-    // We only need the IDs, not the full question body
     const shuffled = availableQuestions.sort(() => 0.5 - Math.random());
     const selectedIds = shuffled.slice(0, numQuestions).map(q => q.id!);
 
@@ -32,7 +31,6 @@ export async function createMockTestAction(
     const test: MockTest = {
         title,
         durationMinutes,
-        // Update to actual count in case they asked for 50 but only 30 existed
         numQuestions: selectedIds.length,
         categoryIds,
         targetUserIds,
@@ -45,3 +43,44 @@ export async function createMockTestAction(
     const newTestId = await createMockTest(test);
     return newTestId;
 }
+
+export async function updateMockTestAction(
+    testId: string,
+    title: string,
+    durationMinutes: number,
+    numQuestions: number,
+    categoryIds: string[],
+    targetUserIds: string[],
+    adminUid: string
+): Promise<void> {
+    if (!testId || !title || durationMinutes < 1 || numQuestions < 1 || categoryIds.length === 0) {
+        throw new Error("Invalid mock test parameters provided.");
+    }
+
+    const availableQuestions = await getQuestionsInCategories(categoryIds);
+    const shuffled = availableQuestions.sort(() => 0.5 - Math.random());
+    const selectedIds = shuffled.slice(0, numQuestions).map(q => q.id!);
+
+    if (selectedIds.length === 0) {
+        throw new Error("Error: Selected categories contain exactly 0 questions.");
+    }
+
+    const testUpdate: Partial<MockTest> = {
+        title,
+        durationMinutes,
+        numQuestions: selectedIds.length,
+        categoryIds,
+        targetUserIds,
+        questionIds: selectedIds,
+        // We do not change createdAt, createdBy, or goalId on update
+    };
+
+    await updateMockTest(testId, testUpdate);
+}
+
+export async function deleteMockTestAction(testId: string, adminUid: string): Promise<void> {
+    if (!testId || !adminUid) throw new Error("Missing parameters for deletion");
+    // Admin checks can be done at the API boundary, but for now we trust `adminUid` presence
+    await deleteMockTest(testId);
+}
+

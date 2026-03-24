@@ -5,8 +5,9 @@ import { useAuth } from "@/contexts/auth-context";
 import { useGoal } from "@/contexts/goal-context";
 import { getAvailableMockTests, getMockTestResult, getAllMockTests } from "@/lib/db";
 import { MockTest, MockTestResult } from "@/lib/schemas";
+import { deleteMockTestAction } from "@/app/actions/mock-test-actions";
 import { useRouter } from "next/navigation";
-import { Loader2, FileText, Clock, CheckCircle, ArrowRight, ShieldCheck } from "lucide-react";
+import { Loader2, FileText, Clock, CheckCircle, ArrowRight, ShieldCheck, Edit2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TestWithResult extends MockTest {
@@ -45,6 +46,17 @@ export default function MockTestsPage() {
             }
         })();
     }, [user, isAdmin, activeGoalId]);
+
+    const handleDelete = async (testId: string) => {
+        if (!confirm("Are you sure you want to delete this mock test? This cannot be undone.")) return;
+        try {
+            await deleteMockTestAction(testId, user!.uid);
+            setTests(prev => prev.filter(t => t.id !== testId));
+        } catch (err) {
+            console.error("Failed to delete", err);
+            alert("Failed to delete mock test.");
+        }
+    };
 
     if (isLoading) {
         return (
@@ -101,19 +113,39 @@ export default function MockTestsPage() {
                                             : "border-[#283039] hover:border-primary/30"
                                     )}
                                 >
-                                    <div className="flex items-start justify-between">
+                                    <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1 min-w-0">
                                             <h3 className="font-bold text-white text-lg truncate">{test.title}</h3>
                                             <p className="text-xs text-[#9dabb9] mt-1">
                                                 Created {new Date(test.createdAt).toLocaleDateString()}
                                             </p>
                                         </div>
-                                        {isCompleted && (
-                                            <div className="shrink-0 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-bold px-2.5 py-1 rounded-full">
-                                                <CheckCircle className="w-3.5 h-3.5" />
-                                                Done
-                                            </div>
-                                        )}
+                                        <div className="shrink-0 flex flex-col items-end gap-2">
+                                            {isCompleted && (
+                                                <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-xs font-bold px-2.5 py-1 rounded-full">
+                                                    <CheckCircle className="w-3.5 h-3.5" />
+                                                    Done
+                                                </div>
+                                            )}
+                                            {isAdmin && (
+                                                <div className="flex items-center gap-1">
+                                                    <button 
+                                                        onClick={() => router.push(`/mock-tests/manage?edit=${test.id}`)}
+                                                        className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                                                        title="Edit Test"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleDelete(test.id!)}
+                                                        className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors"
+                                                        title="Delete Test"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center gap-4 text-sm text-[#9dabb9]">

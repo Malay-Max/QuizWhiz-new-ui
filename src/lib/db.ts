@@ -398,6 +398,19 @@ export async function createMockTest(test: MockTest) {
     return docRef.id;
 }
 
+export async function updateMockTest(testId: string, data: Partial<MockTest>) {
+    const docRef = doc(db, "mockTests", testId);
+    await updateDoc(docRef, data);
+}
+
+export async function deleteMockTest(testId: string) {
+    // Note: We don't automatically delete mockTestResults here.
+    // Preserving them allows admins to still see stats for deleted tests if needed,
+    // or we can clean them up via an admin script later.
+    const docRef = doc(db, "mockTests", testId);
+    await deleteDoc(docRef);
+}
+
 export async function getMockTest(id: string) {
     const snapshot = await getDoc(doc(db, "mockTests", id));
     if (snapshot.exists()) return { id: snapshot.id, ...snapshot.data() } as MockTest;

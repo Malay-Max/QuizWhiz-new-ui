@@ -1,19 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getCategories, getAllUsers } from "@/lib/db";
+import { getCategories, getAllUsers, getMockTest } from "@/lib/db";
 import { Category } from "@/lib/schemas";
-import { createMockTestAction } from "@/app/actions/mock-test-actions";
+import { createMockTestAction, updateMockTestAction } from "@/app/actions/mock-test-actions";
 import { useAuth, UserDoc } from "@/contexts/auth-context";
 import { useGoal } from "@/contexts/goal-context";
-import { Loader2, Plus, Users, Folder, Clock, CheckSquare, Square, Search } from "lucide-react";
+import { Loader2, Plus, Users, Folder, Clock, CheckSquare, Square, Search, Edit2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function ManageMockTestsPage() {
+function ManageMockTestsContent() {
     const { user, isAdmin } = useAuth();
     const { activeGoalId } = useGoal();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const editId = searchParams.get("edit");
+    const [isEditMode, setIsEditMode] = useState(false);
 
     const [categories, setCategories] = useState<Category[]>([]);
     const [users, setUsers] = useState<UserDoc[]>([]);
@@ -34,14 +38,34 @@ export default function ManageMockTestsPage() {
     useEffect(() => {
         if (!isAdmin) return;
         setIsLoading(true);
-        Promise.all([getCategories(activeGoalId ?? undefined), getAllUsers()])
-            .then(([cats, allUsers]) => {
+        const fetchAll = async () => {
+            try {
+                const [cats, allUsers] = await Promise.all([
+                    getCategories(activeGoalId ?? undefined), 
+                    getAllUsers()
+                ]);
                 setCategories(cats);
                 setUsers(allUsers as any as UserDoc[]);
-            })
-            .catch(console.error)
-            .finally(() => setIsLoading(false));
-    }, [isAdmin, activeGoalId]);
+
+                if (editId) {
+                    const test = await getMockTest(editId);
+                    if (test) {
+                        setIsEditMode(true);
+                        setTitle(test.title);
+                        setDurationMinutes(test.durationMinutes);
+                        setNumQuestions(test.numQuestions);
+                        setSelectedCategories(new Set(test.categoryIds));
+                        setSelectedUsers(new Set(test.targetUserIds));
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchAll();
+    }, [isAdmin, activeGoalId, editId]);
 
     if (!isAdmin) {
         return (
@@ -87,15 +111,27 @@ export default function ManageMockTestsPage() {
 
         setIsSubmitting(true);
         try {
-            await createMockTestAction(
-                title.trim(),
-                durationMinutes,
-                numQuestions,
-                Array.from(selectedCategories),
-                Array.from(selectedUsers),
-                user!.uid,
-                activeGoalId ?? undefined
-            );
+            if (isEditMode && editId) {
+                await updateMockTestAction(
+                    editId,
+                    title.trim(),
+                    durationMinutes,
+                    numQuestions,
+                    Array.from(selectedCategories),
+                    Array.from(selectedUsers),
+                    user!.uid
+                );
+            } else {
+                await createMockTestAction(
+                    title.trim(),
+                    durationMinutes,
+                    numQuestions,
+                    Array.from(selectedCategories),
+                    Array.from(selectedUsers),
+                    user!.uid,
+                    activeGoalId ?? undefined
+                );
+            }
             setSuccess(true);
             setTitle("");
             setSelectedCategories(new Set());
@@ -103,7 +139,7 @@ export default function ManageMockTestsPage() {
             setTimeout(() => router.push("/mock-tests"), 2000);
         } catch (err: any) {
             console.error(err);
-            setError(err.message || "Failed to create mock test.");
+            setError(err.message || `Failed to ${isEditMode ? "update" : "create"} mock test.`);
         } finally {
             setIsSubmitting(false);
         }
@@ -123,8 +159,8 @@ export default function ManageMockTestsPage() {
             <div className="max-w-4xl w-full mx-auto space-y-8">
                 <div>
                     <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                        <Plus className="w-8 h-8 text-primary" />
-                        Create Mock Test
+                        {isEditMode ? <Edit2 className="w-8 h-8 text-primary" /> : <Plus className="w-8 h-8 text-primary" />}
+                        {isEditMode ? "Update Mock Test" : "Create Mock Test"}
                     </h1>
                     <p className="text-[#9dabb9] mt-2">
                         Configure a timed examination. Questions will be randomly pulled from your selected categories.
@@ -299,7 +335,7 @@ export default function ManageMockTestsPage() {
 
                     {success && (
                         <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm font-medium text-center animate-pulse">
-                            Mock Test created successfully! Redirecting...
+                            Mock Test {isEditMode ? "updated" : "created"} successfully! Redirecting...
                         </div>
                     )}
 
@@ -309,12 +345,24 @@ export default function ManageMockTestsPage() {
                             disabled={isSubmitting || success}
                             className="flex items-center gap-2 bg-primary text-white px-8 py-3 rounded-xl font-bold hover:bg-primary/90 transition-colors disabled:opacity-50"
                         >
-                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                            {isSubmitting ? "Generating..." : "Generate Mock Test"}
+                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (isEditMode ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />)}
+                            {isSubmitting ? (isEditMode ? "Updating..." : "Generating...") : (isEditMode ? "Update Mock Test" : "Generate Mock Test")}
                         </button>
                     </div>
                 </form>
             </div>
         </div>
+    );
+}
+
+export default function ManageMockTestsPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-full items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        }>
+            <ManageMockTestsContent />
+        </Suspense>
     );
 }
