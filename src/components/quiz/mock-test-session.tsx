@@ -37,6 +37,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [result, setResult] = useState<MockTestResult | null>(existingResult ?? null);
     const [showConfirm, setShowConfirm] = useState(false);
+    const [showExitConfirm, setShowExitConfirm] = useState(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // AI explanation state for results view
@@ -151,9 +152,16 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
                 <div className="flex items-center gap-3">
                     {isTestMode ? (
                         <>
+                            <button
+                                onClick={() => setShowExitConfirm(true)}
+                                className="p-2 text-[#9dabb9] hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors shrink-0"
+                                title="Exit Test without saving"
+                            >
+                                <XCircle className="w-5 h-5" />
+                            </button>
                             <div
                                 className={cn(
-                                    "flex items-center gap-2 px-4 py-2 rounded-xl font-mono font-bold text-lg",
+                                    "flex items-center gap-2 px-4 py-2 rounded-xl font-mono font-bold text-lg shrink-0",
                                     timeLeft <= 60
                                         ? "bg-red-500/20 text-red-400 animate-pulse"
                                         : timeLeft <= 300
@@ -405,6 +413,38 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
                                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
                             >
                                 {isSubmitting ? "Submitting..." : "Confirm Submit"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Exit Confirmation Modal */}
+            {showExitConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                    <div className="bg-[#1c2127] border border-[#283039] rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
+                        <div className="flex items-center gap-3">
+                            <AlertTriangle className="w-8 h-8 text-amber-400 shrink-0" />
+                            <h3 className="text-xl font-bold text-white">Exit Without Saving?</h3>
+                        </div>
+                        <p className="text-[#9dabb9] text-sm leading-relaxed">
+                            Are you sure you want to exit? Your progress will not be saved and you can restart the mock test later.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowExitConfirm(false)}
+                                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#283039] text-white hover:bg-[#3a4550] transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowExitConfirm(false);
+                                    router.push("/mock-tests");
+                                }}
+                                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                            >
+                                Exit Test
                             </button>
                         </div>
                     </div>

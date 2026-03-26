@@ -14,6 +14,7 @@ import {
     limit,
     arrayUnion,
     arrayRemove,
+    deleteField,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { Question, Category, UserProgress, MockTest, MockTestResult, Goal, UserActivity } from "./schemas";
@@ -125,6 +126,28 @@ export async function getCategories(goalId?: string) {
     }
 
     return allCats.filter(c => includedIds.has(c.id!));
+}
+
+export async function updateCategory(categoryId: string, data: Partial<Category> & { parentId?: string | null }) {
+    const catRef = doc(categoriesRef, categoryId);
+    const payload: any = { ...data };
+    
+    // Handle clearing parentId (moving to root)
+    if (payload.parentId === null) {
+        payload.parentId = deleteField();
+    }
+    
+    // Discard any undefined values to avoid Firestore crash
+    Object.keys(payload).forEach(key => {
+        if (payload[key] === undefined) delete payload[key];
+    });
+    
+    await updateDoc(catRef, payload);
+}
+
+export async function deleteCategory(categoryId: string) {
+    const catRef = doc(categoriesRef, categoryId);
+    await deleteDoc(catRef);
 }
 
 export async function assignCategoryToGoal(categoryId: string, goalId: string) {

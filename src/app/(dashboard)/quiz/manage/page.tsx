@@ -19,10 +19,13 @@ import {
     getQuestionsInCategories,
     deleteQuestion,
     updateQuestion,
+    updateCategory,
+    deleteCategory,
 } from "@/lib/db";
 import { Question, Category } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 import { EditQuestionModal } from "@/components/quiz/edit-question-modal";
+import { EditCategoryModal } from "@/components/quiz/edit-category-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { useGoal } from "@/contexts/goal-context";
 import Link from "next/link";
@@ -46,6 +49,7 @@ export default function ManagePage() {
     const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([{ id: null, name: "Home" }]);
     const [searchTerm, setSearchTerm] = useState("");
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+    const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
     // Fetch categories once on mount (scoped to active goal)
     useEffect(() => {
@@ -107,6 +111,47 @@ export default function ManagePage() {
         if (!confirm(`Delete "${q.text.slice(0, 60)}..."?`)) return;
         await deleteQuestion(q.id!);
         setQuestions(prev => prev.filter(item => item.id !== q.id));
+    };
+
+    const handleSaveCategoryEdit = async (updated: Category) => {
+        // Find existing to know if parent changed
+        const existingCat = categories.find(c => c.id === updated.id);
+        
+        await updateCategory(updated.id!, { 
+            name: updated.name, 
+            parentId: updated.parentId || null 
+        } as any);
+        
+        setCategories(prev => prev.map(c => c.id === updated.id ? updated : c));
+        setEditingCategory(null);
+        
+        // If parent changed and we are in the old parent's directory, we should probably 
+        // remove it from currentSubcategories, but React's useMemo on currentSubcategories 
+        // will handle that automatically because "categories" state is updated!
+    };
+
+    const handleDeleteCategory = async (cat: Category) => {
+        const hasChildren = categories.some(c => c.parentId === cat.id);
+        if (hasChildren) {
+            alert("Cannot delete category because it contains subcategories. Please delete or move them first.");
+            return;
+        }
+        
+        const catQs = await getQuestionsInCategories([cat.id!]);
+        if (catQs.length > 0) {
+            alert(`Cannot delete category because it contains ${catQs.length} question(s). Please delete or move them first.`);
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to delete the category "${cat.name}"?`)) return;
+        
+        await deleteCategory(cat.id!);
+        setCategories(prev => prev.filter(c => c.id !== cat.id));
+        
+        if (currentCategoryId === cat.id) {
+            setBreadcrumb(prev => prev.slice(0, -1));
+            setCurrentCategoryId(cat.parentId || null);
+        }
     };
 
     const handleSaveEdit = async (updated: Question) => {
@@ -211,15 +256,35 @@ export default function ManagePage() {
                                         key={cat.id}
                                         className="group relative flex flex-col gap-3 p-4 bg-[#1c2127] hover:bg-[#283039] border border-[#283039] hover:border-primary/30 rounded-xl transition-all"
                                     >
-                                        {/* Start Quiz button */}
-                                        <Link
-                                            href={`/quiz/start?categoryId=${cat.id}`}
-                                            onClick={e => e.stopPropagation()}
-                                            className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-all"
-                                            title="Start Quiz"
-                                        >
-                                            <Play className="w-3.5 h-3.5" />
-                                        </Link>
+                                        {/* Action buttons */}
+                                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all z-10">
+                                            {isAdmin && (
+                                                <>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingCategory(cat); }}
+                                                        className="p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors"
+                                                        title="Edit Category"
+                                                    >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }}
+                                                        className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg transition-colors"
+                                                        title="Delete Category"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </>
+                                            )}
+                                            <Link
+                                                href={`/quiz/start?categoryId=${cat.id}`}
+                                                onClick={e => e.stopPropagation()}
+                                                className="p-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors"
+                                                title="Start Quiz"
+                                            >
+                                                <Play className="w-3.5 h-3.5" />
+                                            </Link>
+                                        </div>
 
                                         {/* Navigate into folder */}
                                         <button
@@ -332,6 +397,15 @@ export default function ManagePage() {
                     categories={categories}
                     onSave={handleSaveEdit}
                     onClose={() => setEditingQuestion(null)}
+                />
+            )}
+            {/* Edit Category Modal — admin only */}
+            {isAdmin && editingCategory && (
+                <EditCategoryModal
+                    category={editingCategory}
+                    categories={categories}
+                    onSave={handleSaveCategoryEdit}
+                    onClose={() => setEditingCategory(null)}
                 />
             )}
         </div>
