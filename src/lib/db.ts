@@ -491,9 +491,15 @@ export async function getMockTestResult(testId: string, userId: string) {
 }
 
 // Admin helper to get user list for assignment
-export async function getAllUsers() {
+export async function getAllUsers(goalId?: string) {
     const usersRef = collection(db, "users");
-    const snapshot = await getDocs(usersRef);
+    let snapshot;
+    if (goalId) {
+        const q = query(usersRef, where("assignedGoalIds", "array-contains", goalId));
+        snapshot = await getDocs(q);
+    } else {
+        snapshot = await getDocs(usersRef);
+    }
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 

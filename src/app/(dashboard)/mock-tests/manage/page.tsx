@@ -42,7 +42,7 @@ function ManageMockTestsContent() {
             try {
                 const [cats, allUsers] = await Promise.all([
                     getCategories(activeGoalId ?? undefined), 
-                    getAllUsers()
+                    getAllUsers(activeGoalId ?? undefined)
                 ]);
                 setCategories(cats);
                 setUsers(allUsers as any as UserDoc[]);

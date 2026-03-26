@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchAllUsersAction, fetchUserStatsAction } from "@/app/actions/analytics-actions";
+import { useGoal } from "@/contexts/goal-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BrainCircuit, Loader2, Target, Activity, Clock, LogOut, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ import {
 } from 'recharts';
 
 export default function AnalyticsPage() {
+    const { activeGoalId } = useGoal();
     const [users, setUsers] = useState<any[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string>("");
 
@@ -31,21 +33,21 @@ export default function AnalyticsPage() {
     useEffect(() => {
         async function loadUsers() {
             setLoadingUsers(true);
-            const res = await fetchAllUsersAction();
+            const res = await fetchAllUsersAction(activeGoalId ?? undefined);
             if (res.success) {
                 setUsers(res.users);
             }
             setLoadingUsers(false);
         }
         loadUsers();
-    }, []);
+    }, [activeGoalId]);
 
     useEffect(() => {
         if (!selectedUserId) return;
 
         async function loadStats() {
             setLoadingStats(true);
-            const res = await fetchUserStatsAction(selectedUserId);
+            const res = await fetchUserStatsAction(selectedUserId, activeGoalId ?? undefined);
             if (res.success) {
                 setStats(res.stats);
 
@@ -62,7 +64,7 @@ export default function AnalyticsPage() {
             setLoadingStats(false);
         }
         loadStats();
-    }, [selectedUserId]);
+    }, [selectedUserId, activeGoalId]);
 
     const formatTime = (totalSeconds: number) => {
         const h = Math.floor(totalSeconds / 3600);

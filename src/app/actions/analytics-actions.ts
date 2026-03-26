@@ -22,9 +22,9 @@ export async function logActivityAction(userId: string, activeSeconds: number) {
     }
 }
 
-export async function fetchAllUsersAction() {
+export async function fetchAllUsersAction(goalId?: string) {
     try {
-        const rawUsers = await getAllUsers();
+        const rawUsers = await getAllUsers(goalId);
         // Serialize any Firestore Timestamp fields before sending to Client Components
         const users = rawUsers.map((u: any) => ({
             ...u,
@@ -37,15 +37,15 @@ export async function fetchAllUsersAction() {
     }
 }
 
-export async function fetchUserStatsAction(userId: string) {
+export async function fetchUserStatsAction(userId: string, goalId?: string) {
     try {
-        const stats = await getUserStats(userId);
+        const stats = await getUserStats(userId, goalId);
         const activityHistory = await getUserActivityHistory(userId, 7);
 
         // Fetch mock tests — wrapped in try/catch in case index is missing
         let completedMockTests: any[] = [];
         try {
-            const mockTests = await getAvailableMockTests(userId);
+            const mockTests = await getAvailableMockTests(userId, goalId);
             for (const test of mockTests) {
                 const result = await getMockTestResult(test.id!, userId);
                 if (result) {
