@@ -20,10 +20,17 @@ import {
     Upload,
     BookOpen,
     X,
+    PenTool,
+    Image as ImageIcon,
+    AlertTriangle,
+    ChevronDown,
+    Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { generateQuestionsAction } from "@/app/actions/generate-questions";
 import { extractPYQsFromTextAction, extractPYQsFromPdfAction } from "@/app/actions/extract-pyqs";
+import { extractHandwrittenAction } from "@/app/actions/extract-handwritten";
+import { listModelsAction, AvailableModel } from "@/app/actions/list-models";
 import { parsePYQText } from "@/lib/pyq-parser";
 import { Question, Category } from "@/lib/schemas";
 import ReactMarkdown from "react-markdown";
@@ -42,11 +49,23 @@ export default function GenerateQuestionsPage() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([]);
-    const [mode, setMode] = useState<"notes" | "pyqs">("notes");
+    const [mode, setMode] = useState<"notes" | "pyqs" | "handwritten">("notes");
     const [pdfFile, setPdfFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [localParseFailed, setLocalParseFailed] = useState(false);
     const [autoExtract, setAutoExtract] = useState(true);
+
+    // Handwritten note state
+    const [handwrittenImage, setHandwrittenImage] = useState<File | null>(null);
+    const [handwrittenPreview, setHandwrittenPreview] = useState<string | null>(null);
+    const [isExtracting, setIsExtracting] = useState(false);
+    const handwrittenInputRef = useRef<HTMLInputElement>(null);
+
+    // AI Model selection state
+    const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
+    const [selectedModelId, setSelectedModelId] = useState("googleai/gemini-2.0-flash");
+    const [modelsLoading, setModelsLoading] = useState(true);
+    const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
 
     // Folder browser state
     const [categories, setCategories] = useState<Category[]>([]);
@@ -73,6 +92,29 @@ export default function GenerateQuestionsPage() {
             .finally(() => setCatsLoading(false));
     }, [activeGoalId]);
 
+    // Load available AI models on mount
+    useEffect(() => {
+        setModelsLoading(true);
+        listModelsAction()
+            .then((models) => {
+                setAvailableModels(models);
+                // Pre-select gemini-2.0-flash if available
+                const defaultModel = models.find(m => m.id === "googleai/gemini-2.0-flash");
+                if (defaultModel) setSelectedModelId(defaultModel.id);
+                else if (models.length > 0) setSelectedModelId(models[0].id);
+            })
+            .catch(console.error)
+            .finally(() => setModelsLoading(false));
+    }, []);
+
+    // Derived model info
+    const selectedModelObj = useMemo(() =>
+        availableModels.find(m => m.id === selectedModelId),
+        [availableModels, selectedModelId]
+    );
+    const selectedModelDisplay = selectedModelObj?.displayName ?? selectedModelId.replace("googleai/", "");
+    const selectedModelVision = selectedModelObj?.supportsVision ?? true;
+
     const handleSaveAll = async () => {
         if (generatedQuestions.length === 0 || !selectedCategoryId) return;
         setIsSaving(true);
@@ -93,12 +135,43 @@ export default function GenerateQuestionsPage() {
         }
     };
 
+    // Handle handwritten image selection
+    const handleHandwrittenImageSelect = (file: File) => {
+        setHandwrittenImage(file);
+        const url = URL.createObjectURL(file);
+        setHandwrittenPreview(url);
+    };
+
+    const clearHandwrittenImage = () => {
+        setHandwrittenImage(null);
+        if (handwrittenPreview) URL.revokeObjectURL(handwrittenPreview);
+        setHandwrittenPreview(null);
+        if (handwrittenInputRef.current) handwrittenInputRef.current.value = "";
+    };
+
+    // Extract text from handwritten image
+    const handleExtractHandwritten = async () => {
+        if (!handwrittenImage) return;
+        setIsExtracting(true);
+        try {
+            const formData = new FormData();
+            formData.append("image", handwrittenImage);
+            const extractedText = await extractHandwrittenAction(formData, selectedModelId);
+            setNotes(extractedText);
+        } catch (e: any) {
+            console.error(e);
+            alert(e.message || "Failed to extract text. Please try again.");
+        } finally {
+            setIsExtracting(false);
+        }
+    };
+
     const handleGenerate = async () => {
-        if (mode === "notes") {
+        if (mode === "notes" || mode === "handwritten") {
             if (!notes || notes.length < 50) return;
             setIsGenerating(true);
             try {
-                const questions = await generateQuestionsAction(notes);
+                const questions = await generateQuestionsAction(notes, "temp-category", selectedModelId);
                 setGeneratedQuestions(questions);
             } catch (e) {
                 console.error(e);
@@ -114,7 +187,7 @@ export default function GenerateQuestionsPage() {
                 if (pdfFile) {
                     const formData = new FormData();
                     formData.append("pdf", pdfFile);
-                    questions = await extractPYQsFromPdfAction(formData);
+                    questions = await extractPYQsFromPdfAction(formData, "temp-category", selectedModelId);
                 } else if (notes.length >= 50) {
                     if (autoExtract) {
                         // Try local regex parsing first (instant, no AI cost)
@@ -130,7 +203,7 @@ export default function GenerateQuestionsPage() {
                         }
                     } else {
                         // Auto-extract off — go directly to AI
-                        questions = await extractPYQsFromTextAction(notes);
+                        questions = await extractPYQsFromTextAction(notes, "temp-category", selectedModelId);
                     }
                 } else {
                     alert("Please upload a PDF or paste PYQ text (min 50 chars).");
@@ -263,24 +336,34 @@ export default function GenerateQuestionsPage() {
                     {/* Mode Toggle */}
                     <div className="flex bg-[#1c2127] rounded-xl p-1 border border-[#283039]">
                         <button
-                            onClick={() => { setMode("notes"); setPdfFile(null); }}
+                            onClick={() => { setMode("notes"); setPdfFile(null); clearHandwrittenImage(); }}
                             className={cn(
                                 "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
                                 mode === "notes" ? "bg-[#111418] text-white shadow-sm" : "text-[#9dabb9] hover:text-white"
                             )}
                         >
                             <FileText className="w-4 h-4" />
-                            From Notes
+                            Notes
                         </button>
                         <button
-                            onClick={() => setMode("pyqs")}
+                            onClick={() => { setMode("handwritten"); setPdfFile(null); }}
+                            className={cn(
+                                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
+                                mode === "handwritten" ? "bg-[#111418] text-white shadow-sm" : "text-[#9dabb9] hover:text-white"
+                            )}
+                        >
+                            <PenTool className="w-4 h-4" />
+                            Handwritten
+                        </button>
+                        <button
+                            onClick={() => { setMode("pyqs"); clearHandwrittenImage(); }}
                             className={cn(
                                 "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
                                 mode === "pyqs" ? "bg-[#111418] text-white shadow-sm" : "text-[#9dabb9] hover:text-white"
                             )}
                         >
                             <BookOpen className="w-4 h-4" />
-                            From PYQs
+                            PYQs
                         </button>
                     </div>
 
@@ -288,11 +371,87 @@ export default function GenerateQuestionsPage() {
                     <div className="space-y-3">
                         <div className="flex justify-between items-center">
                             <label className="text-sm font-semibold text-white flex items-center gap-2">
-                                {mode === "notes" ? <FileText className="text-primary w-5 h-5" /> : <BookOpen className="text-primary w-5 h-5" />}
-                                {mode === "notes" ? "Source Material" : "PYQ Content"}
+                                {mode === "notes" ? <FileText className="text-primary w-5 h-5" /> : mode === "handwritten" ? <PenTool className="text-primary w-5 h-5" /> : <BookOpen className="text-primary w-5 h-5" />}
+                                {mode === "notes" ? "Source Material" : mode === "handwritten" ? "Handwritten Notes" : "PYQ Content"}
                             </label>
                             <span className="text-xs text-[#9dabb9]">Min 50 chars</span>
                         </div>
+
+                        {/* Handwritten Image Upload (handwritten mode only) */}
+                        {mode === "handwritten" && (
+                            <div className="space-y-3">
+                                <input
+                                    ref={handwrittenInputRef}
+                                    type="file"
+                                    accept=".jpg,.jpeg,.png,.webp"
+                                    className="hidden"
+                                    onChange={e => {
+                                        const f = e.target.files?.[0];
+                                        if (f) handleHandwrittenImageSelect(f);
+                                    }}
+                                />
+                                {handwrittenImage && handwrittenPreview ? (
+                                    <div className="space-y-3">
+                                        <div className="relative rounded-xl overflow-hidden border border-[#283039] bg-[#1c2127]">
+                                            <img
+                                                src={handwrittenPreview}
+                                                alt="Handwritten notes preview"
+                                                className="w-full max-h-48 object-contain bg-black/20"
+                                            />
+                                            <button
+                                                onClick={clearHandwrittenImage}
+                                                className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-lg text-white transition-colors"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2 flex-1 min-w-0 bg-primary/10 border border-primary/20 rounded-xl p-3">
+                                                <ImageIcon className="w-5 h-5 text-primary shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm text-white font-medium truncate">{handwrittenImage.name}</p>
+                                                    <p className="text-xs text-[#9dabb9]">{(handwrittenImage.size / 1024).toFixed(1)} KB</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={handleExtractHandwritten}
+                                                disabled={isExtracting}
+                                                className="h-12 px-5 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap"
+                                            >
+                                                {isExtracting ? (
+                                                    <><Loader2 className="w-4 h-4 animate-spin" /> Extracting...</>
+                                                ) : (
+                                                    <><Sparkles className="w-4 h-4 fill-current" /> Extract Text</>
+                                                )}
+                                            </button>
+                                        </div>
+                                        {!selectedModelVision && (
+                                            <div className="flex items-center gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-300">
+                                                <AlertTriangle className="w-4 h-4 shrink-0" />
+                                                <span>Selected model may not support image input. Choose a vision-capable model for best results.</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => handwrittenInputRef.current?.click()}
+                                        className="w-full border-2 border-dashed border-[#283039] hover:border-purple-500/50 rounded-xl p-6 flex flex-col items-center gap-3 text-[#9dabb9] hover:text-white transition-all group cursor-pointer"
+                                    >
+                                        <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+                                            <PenTool className="w-6 h-6 text-purple-400 group-hover:text-purple-300 transition-colors" />
+                                        </div>
+                                        <span className="text-sm font-medium">Upload Handwritten Notes</span>
+                                        <span className="text-xs text-[#9dabb9]">JPEG, PNG, or WebP — AI will extract the text for you</span>
+                                    </button>
+                                )}
+                                {notes && (
+                                    <p className="text-xs text-green-400/80 flex items-center gap-1.5">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        Text extracted! Review and edit below, then generate questions.
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         {/* PDF Upload (PYQ mode only) */}
                         {mode === "pyqs" && (
@@ -344,7 +503,9 @@ export default function GenerateQuestionsPage() {
                                 className="w-full h-48 bg-[#1c2127] border border-[#283039] rounded-xl p-4 text-base text-white placeholder:text-[#9dabb9]/50 focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none outline-none"
                                 placeholder={mode === "notes"
                                     ? "Paste your lecture notes, articles, or summaries here..."
-                                    : "Paste your PYQ text here (questions, options, answer keys)..."
+                                    : mode === "handwritten"
+                                        ? "Extracted text will appear here. You can edit it before generating questions..."
+                                        : "Paste your PYQ text here (questions, options, answer keys)..."
                                 }
                             ></textarea>
                             <div className="absolute bottom-3 right-3 text-xs text-[#9dabb9] bg-[#1c2127]/80 px-2 py-1 rounded">
@@ -495,6 +656,56 @@ export default function GenerateQuestionsPage() {
                         </div>
                     )}
 
+                    {/* AI Model Selector */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-white flex items-center gap-2">
+                            <Cpu className="text-primary w-5 h-5" />
+                            AI Model
+                        </label>
+                        <div className="relative">
+                            <button
+                                onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                                className="w-full flex items-center justify-between gap-2 bg-[#1c2127] border border-[#283039] rounded-xl px-4 py-3 text-sm text-white hover:border-primary/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-2 min-w-0">
+                                    {modelsLoading ? (
+                                        <><Loader2 className="w-4 h-4 animate-spin text-[#9dabb9]" /> <span className="text-[#9dabb9]">Loading models...</span></>
+                                    ) : (
+                                        <>
+                                            <span className="truncate">{selectedModelDisplay}</span>
+                                            {selectedModelVision && (
+                                                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded">Vision</span>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                                <ChevronDown className={cn("w-4 h-4 text-[#9dabb9] transition-transform shrink-0", modelDropdownOpen && "rotate-180")} />
+                            </button>
+                            {modelDropdownOpen && !modelsLoading && (
+                                <div className="absolute z-20 top-full mt-1 w-full bg-[#1c2127] border border-[#283039] rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                                    {availableModels.map(model => (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => { setSelectedModelId(model.id); setModelDropdownOpen(false); }}
+                                            className={cn(
+                                                "w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left transition-colors",
+                                                model.id === selectedModelId
+                                                    ? "bg-primary/10 text-white"
+                                                    : "text-[#9dabb9] hover:bg-[#283039]/50 hover:text-white"
+                                            )}
+                                        >
+                                            <span className="flex-1 truncate">{model.displayName}</span>
+                                            {model.supportsVision && (
+                                                <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded">Vision</span>
+                                            )}
+                                            {model.id === selectedModelId && <Check className="w-4 h-4 text-primary shrink-0" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {/* Action Buttons */}
                     <div className="pt-2 flex gap-3">
                         {mode === "pyqs" && localParseFailed ? (
@@ -502,7 +713,7 @@ export default function GenerateQuestionsPage() {
                                 onClick={async () => {
                                     setIsGenerating(true);
                                     try {
-                                        const questions = await extractPYQsFromTextAction(notes);
+                                        const questions = await extractPYQsFromTextAction(notes, "temp-category", selectedModelId);
                                         setGeneratedQuestions(questions);
                                         setLocalParseFailed(false);
                                     } catch (e) {
@@ -521,11 +732,14 @@ export default function GenerateQuestionsPage() {
                         ) : (
                             <button
                                 onClick={handleGenerate}
-                                disabled={isGenerating || (mode === "notes" && notes.length < 50) || (mode === "pyqs" && !pdfFile && notes.length < 50)}
+                                disabled={isGenerating || ((mode === "notes" || mode === "handwritten") && notes.length < 50) || (mode === "pyqs" && !pdfFile && notes.length < 50)}
                                 className="flex-1 h-12 bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
-                                {mode === "notes" ? <Sparkles className="w-5 h-5 fill-current" /> : <BookOpen className="w-5 h-5" />}
-                                {isGenerating ? (mode === "notes" ? "Generating..." : "Extracting...") : (mode === "notes" ? "Generate Questions" : "Extract PYQs")}
+                                {mode === "notes" || mode === "handwritten" ? <Sparkles className="w-5 h-5 fill-current" /> : <BookOpen className="w-5 h-5" />}
+                                {isGenerating
+                                    ? (mode === "pyqs" ? "Extracting..." : "Generating...")
+                                    : (mode === "pyqs" ? "Extract PYQs" : "Generate Questions")
+                                }
                             </button>
                         )}
                         <button
@@ -538,7 +752,7 @@ export default function GenerateQuestionsPage() {
                     </div>
                     <div className="flex items-center gap-2 p-3 bg-primary/10 border border-primary/20 rounded-lg text-xs text-primary/80">
                         <InfoIcon className="w-4 h-4" />
-                        <span>Pro Tip: Use structured notes with clear headings for better results.</span>
+                        <span>{mode === "handwritten" ? "Upload a clear photo of your handwritten notes. The AI will extract the text so you can review and edit it before generating questions." : "Pro Tip: Use structured notes with clear headings for better results."}</span>
                     </div>
                 </div>
             </aside>

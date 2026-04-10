@@ -5,10 +5,9 @@ import { googleAI } from "@genkit-ai/googleai";
 import { z } from "zod";
 import { Question } from "@/lib/schemas";
 
-// Initialize Genkit
+// Initialize Genkit (no hardcoded model — passed dynamically)
 const ai = genkit({
     plugins: [googleAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY })],
-    model: "googleai/gemini-3-pro-preview",
 });
 
 // Same output schema as generate-questions
@@ -23,8 +22,10 @@ const ExtractedQuestionsSchema = z.object({
     }))
 });
 
-export async function extractPYQsFromTextAction(text: string, categoryId = "temp-category"): Promise<Question[]> {
+export async function extractPYQsFromTextAction(text: string, categoryId = "temp-category", modelId?: string): Promise<Question[]> {
+    const selectedModel = modelId || "googleai/gemini-2.0-flash";
     const { output } = await ai.generate({
+        model: selectedModel,
         prompt: `You are an expert academic question parser and answer key generator. You will be given raw text that contains Previously Asked Questions (PYQs) from competitive exams, textbooks, or question papers.
 
 Your task:
@@ -71,7 +72,7 @@ Input Text:
     });
 }
 
-export async function extractPYQsFromPdfAction(formData: FormData, categoryId = "temp-category"): Promise<Question[]> {
+export async function extractPYQsFromPdfAction(formData: FormData, categoryId = "temp-category", modelId?: string): Promise<Question[]> {
     const file = formData.get("pdf") as File;
     if (!file) throw new Error("No PDF file provided");
 
@@ -88,5 +89,5 @@ export async function extractPYQsFromPdfAction(formData: FormData, categoryId = 
     }
 
     // Use the same extraction logic with the extracted text
-    return extractPYQsFromTextAction(pdfData.text, categoryId);
+    return extractPYQsFromTextAction(pdfData.text, categoryId, modelId);
 }

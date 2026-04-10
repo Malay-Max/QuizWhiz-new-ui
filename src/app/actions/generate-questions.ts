@@ -5,10 +5,9 @@ import { googleAI } from "@genkit-ai/googleai";
 import { z } from "zod";
 import { Question } from "@/lib/schemas";
 
-// Initialize Genkit
+// Initialize Genkit (no hardcoded model — passed dynamically)
 const ai = genkit({
     plugins: [googleAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY })],
-    model: "googleai/gemini-3-pro-preview",
 });
 
 // AI output schema - options are plain strings for the AI, we convert afterwards
@@ -22,9 +21,11 @@ const GenerateQuestionsSchema = z.object({
     }))
 });
 
-export async function generateQuestionsAction(text: string, categoryId = "temp-category"): Promise<Question[]> {
+export async function generateQuestionsAction(text: string, categoryId = "temp-category", modelId?: string): Promise<Question[]> {
+    const selectedModel = modelId || "googleai/gemini-2.0-flash";
     try {
         const { output } = await ai.generate({
+            model: selectedModel,
             prompt: `System Role / Persona:
 You are an expert academic assessment designer specializing in postgraduate-level curriculum evaluation. Your task is to generate a dense, exam-ready bank of Multiple Choice Questions (MCQs) and True/False questions based strictly on the provided input text.
 
@@ -53,7 +54,7 @@ To prevent test-takers from "gaming" the test, you must adhere strictly to the f
     Banned Formats: DO NOT use "All of the above," "None of the above," "Both A and C," or similar meta-options under any circumstances.
     Uniform Complexity for Names/Terms: When testing names or specific jargon, do not make the correct term stand out in complexity or formatting.
 
-IMPORTANT: You MUST output in the structured JSON schema provided. For each question, provide 4 options as plain strings and a correctAnswerIndex (0-based) indicating the correct one. The explanation field should contain the rationale explaining why the answer is correct and why the primary distractor is false.
+IMPORTANT: You MUST output in the structured JSON schema provided. For each question, provide 4 options as plain strings and a correctAnswerIndex (0-based) indicating the correct one. The explanation field should contain the rationale explaining why the answer is correct and why the primary distractor is false. In the explanation Do not include any preamble like "Here is the explanation:" or "According to the text:" or similar.
 
 Input Text:
 "${text}"`,
