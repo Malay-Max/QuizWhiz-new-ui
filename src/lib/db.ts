@@ -503,6 +503,12 @@ export async function getAllUsers(goalId?: string) {
     return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+// Update a user's permissions array
+export async function updateUserPermissions(userId: string, permissions: string[]) {
+    const userRef = doc(db, "users", userId);
+    await updateDoc(userRef, { permissions });
+}
+
 // --- Activity Tracking ---
 
 export async function logUserActivity(userId: string, activeSeconds: number) {

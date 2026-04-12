@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Sparkles, Layers, BookOpen, BrainCircuit, LogOut, ShieldCheck, FileText, ClipboardList, Target, ChevronDown, Settings, Activity } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context";
+import { Home, Sparkles, Layers, BookOpen, BrainCircuit, LogOut, ShieldCheck, FileText, ClipboardList, Target, ChevronDown, Settings, Activity, Users } from "lucide-react";
+import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
 import { useGoal } from "@/contexts/goal-context";
 import { logoutUser } from "@/lib/auth";
 import { useState } from "react";
@@ -12,10 +12,10 @@ import { useState } from "react";
 export function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
-    const { userDoc, isAdmin } = useAuth();
+    const { userDoc, isAdmin, hasPermission } = useAuth();
     const { goals, activeGoalId, activeGoal, setActiveGoalId, isLoading: goalsLoading } = useGoal();
     const [goalDropdownOpen, setGoalDropdownOpen] = useState(false);
-    const [manageDropdownOpen, setManageDropdownOpen] = useState(() => pathname.includes('/manage'));
+    const [manageDropdownOpen, setManageDropdownOpen] = useState(() => pathname.includes('/manage') || pathname.includes('/analytics') || pathname.includes('/users'));
 
     // Base nav for all users
     const baseNavItems = [
@@ -36,16 +36,58 @@ export function Sidebar() {
                 { name: "Tests", href: "/mock-tests/manage", icon: ClipboardList },
                 { name: "Goals", href: "/goals/manage", icon: Target },
                 { name: "Analytics", href: "/analytics", icon: Activity },
+                { name: "Users", href: "/users/manage", icon: Users },
             ]
         },
     ];
 
-    const navItems = isAdmin
-        ? [baseNavItems[0], ...adminNavItems, baseNavItems[1], baseNavItems[2]]
-        : [
-            ...baseNavItems,
-            { name: "Question Bank", href: "/quiz/manage", icon: BookOpen },
-        ];
+    // Build elevated user nav (non-admin with specific permissions)
+    const buildElevatedNav = () => {
+        const items: any[] = [];
+        if (hasPermission(PERMISSIONS.GENERATE_QUESTIONS)) {
+            items.push({ name: "Generate", href: "/generate-questions", icon: Sparkles });
+        }
+
+        const manageChildren: any[] = [];
+        if (hasPermission(PERMISSIONS.EDIT_QUESTIONS)) {
+            manageChildren.push({ name: "Questions", href: "/quiz/manage", icon: BookOpen });
+        }
+        if (hasPermission(PERMISSIONS.MANAGE_TESTS)) {
+            manageChildren.push({ name: "Tests", href: "/mock-tests/manage", icon: ClipboardList });
+        }
+        if (hasPermission(PERMISSIONS.MANAGE_GOALS)) {
+            manageChildren.push({ name: "Goals", href: "/goals/manage", icon: Target });
+        }
+        if (hasPermission(PERMISSIONS.VIEW_ANALYTICS)) {
+            manageChildren.push({ name: "Analytics", href: "/analytics", icon: Activity });
+        }
+
+        if (manageChildren.length > 0) {
+            items.push({
+                name: "Manage",
+                href: "#",
+                icon: Settings,
+                children: manageChildren,
+            });
+        }
+
+        return items;
+    };
+
+    let navItems: any[];
+    if (isAdmin) {
+        navItems = [baseNavItems[0], ...adminNavItems, baseNavItems[1], baseNavItems[2]];
+    } else {
+        const elevatedItems = buildElevatedNav();
+        if (elevatedItems.length > 0) {
+            navItems = [baseNavItems[0], ...elevatedItems, baseNavItems[1], baseNavItems[2]];
+        } else {
+            navItems = [
+                ...baseNavItems,
+                { name: "Question Bank", href: "/quiz/manage", icon: BookOpen },
+            ];
+        }
+    }
 
     const handleLogout = async () => {
         await logoutUser();

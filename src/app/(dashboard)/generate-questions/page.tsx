@@ -35,13 +35,14 @@ import { parsePYQText } from "@/lib/pyq-parser";
 import { Question, Category } from "@/lib/schemas";
 import ReactMarkdown from "react-markdown";
 import { addQuestion, getCategories, addCategory } from "@/lib/db";
-import { useAuth } from "@/contexts/auth-context";
+import { useAuth, PERMISSIONS } from "@/contexts/auth-context";
 import { useGoal } from "@/contexts/goal-context";
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
 
 export default function GenerateQuestionsPage() {
-    const { isAdmin, isLoading } = useAuth();
+    const { isAdmin, isLoading, hasPermission } = useAuth();
+    const canGenerate = isAdmin || hasPermission(PERMISSIONS.GENERATE_QUESTIONS);
     const { activeGoalId } = useGoal();
     const router = useRouter();
 
@@ -78,10 +79,10 @@ export default function GenerateQuestionsPage() {
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
     useEffect(() => {
-        if (!isLoading && !isAdmin) {
+        if (!isLoading && !canGenerate) {
             router.replace("/");
         }
-    }, [isAdmin, isLoading, router]);
+    }, [canGenerate, isLoading, router]);
 
     // Load categories for the active goal
     useEffect(() => {
@@ -309,8 +310,8 @@ export default function GenerateQuestionsPage() {
         }
     };
 
-    // Guard — redirect non-admins
-    if (isLoading || !isAdmin) {
+    // Guard — redirect users without generate permission
+    if (isLoading || !canGenerate) {
         return (
             <div className="flex h-full items-center justify-center bg-[#111418]">
                 <div className="flex flex-col items-center gap-3 text-center">
