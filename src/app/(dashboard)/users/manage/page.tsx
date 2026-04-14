@@ -12,10 +12,14 @@ import {
     Mail,
     Clock,
     Zap,
+    Target,
+    Filter,
+    Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth, PERMISSIONS, PERMISSION_LABELS, type PermissionKey, type UserDoc } from "@/contexts/auth-context";
-import { getAllUsers, updateUserPermissions } from "@/lib/db";
+import { useGoal } from "@/contexts/goal-context";
+import { getAllUsers, updateUserPermissions, assignGoalToUser, removeGoalFromUser, deleteUserDoc } from "@/lib/db";
 import { useRouter } from "next/navigation";
 
 const ALL_PERMISSIONS = Object.values(PERMISSIONS) as PermissionKey[];
@@ -35,6 +39,7 @@ interface UserWithId extends UserDoc {
 
 export default function ManageUsersPage() {
     const { isAdmin, isLoading: authLoading } = useAuth();
+    const { goals, activeGoalId } = useGoal();
     const router = useRouter();
 
     const [users, setUsers] = useState<UserWithId[]>([]);
@@ -42,7 +47,9 @@ export default function ManageUsersPage() {
     const [search, setSearch] = useState("");
     const [expandedUser, setExpandedUser] = useState<string | null>(null);
     const [savingUser, setSavingUser] = useState<string | null>(null);
+    const [deletingUser, setDeletingUser] = useState<string | null>(null);
     const [sortBy, setSortBy] = useState<"name" | "role">("role");
+    const [filterByActiveGoal, setFilterByActiveGoal] = useState(false);
 
     useEffect(() => {
         if (!authLoading && !isAdmin) {
@@ -65,6 +72,11 @@ export default function ManageUsersPage() {
     // Filter and sort users
     const filteredUsers = useMemo(() => {
         let result = users;
+
+        // Active goal filter
+        if (filterByActiveGoal && activeGoalId) {
+            result = result.filter(u => u.role === "admin" || (u.assignedGoalIds && u.assignedGoalIds.includes(activeGoalId)));
+        }
 
         // Search filter
         if (search.trim()) {
@@ -124,6 +136,38 @@ export default function ManageUsersPage() {
         }
     };
 
+    // Toggle a goal assignment for a user
+    const toggleGoal = async (userId: string, goalId: string) => {
+        const user = users.find((u) => u.id === userId);
+        if (!user || user.role === "admin") return;
+
+        const currentGoals = user.assignedGoalIds || [];
+        const isAssigned = currentGoals.includes(goalId);
+        const newGoals = isAssigned
+            ? currentGoals.filter((id) => id !== goalId)
+            : [...currentGoals, goalId];
+
+        setUsers((prev) =>
+            prev.map((u) => (u.id === userId ? { ...u, assignedGoalIds: newGoals } : u))
+        );
+
+        setSavingUser(userId);
+        try {
+            if (isAssigned) {
+                await removeGoalFromUser(userId, goalId);
+            } else {
+                await assignGoalToUser(userId, goalId);
+            }
+        } catch (error) {
+            console.error("Failed to update goals:", error);
+            setUsers((prev) =>
+                prev.map((u) => (u.id === userId ? { ...u, assignedGoalIds: currentGoals } : u))
+            );
+        } finally {
+            setSavingUser(null);
+        }
+    };
+
     // Grant all permissions to a user
     const grantAll = async (userId: string) => {
         const user = users.find((u) => u.id === userId);
@@ -167,6 +211,23 @@ export default function ManageUsersPage() {
             );
         } finally {
             setSavingUser(null);
+        }
+    };
+
+    // Delete a user
+    const handleDeleteUser = async (userId: string) => {
+        if (!confirm("Are you sure you want to delete this user? Their profile data will be permanently deleted and they will lose access. This action cannot be undone.")) return;
+        
+        setDeletingUser(userId);
+        try {
+            await deleteUserDoc(userId);
+            setUsers(prev => prev.filter(u => u.id !== userId));
+            if (expandedUser === userId) setExpandedUser(null);
+        } catch (error) {
+            console.error("Failed to delete user:", error);
+            alert("Failed to delete user. Check console for details.");
+        } finally {
+            setDeletingUser(null);
         }
     };
 
@@ -228,8 +289,22 @@ export default function ManageUsersPage() {
                     </div>
 
                     {/* Search and Sort */}
-                    <div className="flex items-center gap-3 mt-4">
-                        <div className="relative flex-1">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-4">
+                        <button
+                            onClick={() => setFilterByActiveGoal(!filterByActiveGoal)}
+                            disabled={!activeGoalId}
+                            className={cn(
+                                "flex items-center gap-2 text-sm rounded-xl px-4 py-2.5 transition-colors whitespace-nowrap border",
+                                filterByActiveGoal
+                                    ? "bg-primary/20 border-primary text-primary font-medium"
+                                    : "bg-[#1c2127] border-[#283039] text-[#9dabb9] hover:text-white hover:border-primary/50 disabled:opacity-50 disabled:pointer-events-none"
+                            )}
+                            title={activeGoalId ? "Filter users by current target goal" : "No active goal selected"}
+                        >
+                            <Filter className="w-4 h-4" />
+                            {filterByActiveGoal ? "Goal Filter Active" : "Filter by Goal"}
+                        </button>
+                        <div className="relative flex-1 min-w-[200px]">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9dabb9]" />
                             <input
                                 type="text"
@@ -329,7 +404,13 @@ export default function ManageUsersPage() {
                                                 </span>
                                                 {!isUserAdmin && userPerms.length > 0 && (
                                                     <span className="text-xs text-blue-400/70">
-                                                        {userPerms.length} permission{userPerms.length !== 1 ? "s" : ""}
+                                                        {userPerms.length} perm{userPerms.length !== 1 ? "s" : ""}
+                                                    </span>
+                                                )}
+                                                {!isUserAdmin && user.assignedGoalIds && user.assignedGoalIds.length > 0 && (
+                                                    <span className="text-xs text-amber-400/70 flex items-center gap-1">
+                                                        <Target className="w-3 h-3" />
+                                                        {user.assignedGoalIds.length} goal{user.assignedGoalIds.length !== 1 ? "s" : ""}
                                                     </span>
                                                 )}
                                             </div>
@@ -435,12 +516,71 @@ export default function ManageUsersPage() {
                                                         })}
                                                     </div>
 
-                                                    {userPerms.length > 0 && (
-                                                        <p className="text-xs text-[#9dabb9]/60 flex items-center gap-1.5">
-                                                            <Clock className="w-3 h-3" />
-                                                            Changes are saved automatically
+                                                    <div className="flex items-center justify-between mt-4">
+                                                        <p className="text-sm font-medium text-white flex items-center gap-2">
+                                                            <Target className="w-4 h-4 text-[#9dabb9]" />
+                                                            Assigned Goals
                                                         </p>
-                                                    )}
+                                                    </div>
+
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {goals && goals.length > 0 ? goals.map((goal) => {
+                                                            const isAssigned = user.assignedGoalIds?.includes(goal.id!);
+                                                            return (
+                                                                <button
+                                                                    key={goal.id}
+                                                                    onClick={() => toggleGoal(user.id, goal.id!)}
+                                                                    disabled={isSaving}
+                                                                    className={cn(
+                                                                        "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50",
+                                                                        isAssigned
+                                                                            ? "bg-amber-500 text-white shadow-sm"
+                                                                            : "bg-amber-500/10 text-amber-400 hover:opacity-80"
+                                                                    )}
+                                                                >
+                                                                    <div
+                                                                        className={cn(
+                                                                            "w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors",
+                                                                            isAssigned
+                                                                                ? "border-white/30 bg-white/20"
+                                                                                : "border-amber-400/30"
+                                                                        )}
+                                                                    >
+                                                                        {isAssigned && (
+                                                                            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                            </svg>
+                                                                        )}
+                                                                    </div>
+                                                                    {goal.name}
+                                                                </button>
+                                                            );
+                                                        }) : (
+                                                            <p className="text-xs text-[#9dabb9]/60 italic">No goals created yet.</p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between mt-4 md:mt-6 pt-4 border-t border-[#283039]/50">
+                                                        {(userPerms.length > 0 || (user.assignedGoalIds && user.assignedGoalIds.length > 0)) ? (
+                                                            <p className="text-xs text-[#9dabb9]/60 flex items-center gap-1.5">
+                                                                <Clock className="w-3 h-3" />
+                                                                Changes are saved automatically
+                                                            </p>
+                                                        ) : <div />}
+                                                        
+                                                        <button
+                                                            onClick={() => handleDeleteUser(user.id)}
+                                                            disabled={deletingUser === user.id}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-500 bg-red-500/10 hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50"
+                                                        >
+                                                            {deletingUser === user.id ? (
+                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            ) : (
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            )}
+                                                            Delete User
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>

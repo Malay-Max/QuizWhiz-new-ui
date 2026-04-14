@@ -33,6 +33,7 @@ export interface UserDoc {
     displayUsername: string;
     role: UserRole;
     permissions?: string[];
+    assignedGoalIds?: string[];
     createdAt: unknown;
 }
 

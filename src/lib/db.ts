@@ -509,6 +509,12 @@ export async function updateUserPermissions(userId: string, permissions: string[
     await updateDoc(userRef, { permissions });
 }
 
+// Delete a user's Firestore document
+export async function deleteUserDoc(userId: string) {
+    const userRef = doc(db, "users", userId);
+    await deleteDoc(userRef);
+}
+
 // --- Activity Tracking ---
 
 export async function logUserActivity(userId: string, activeSeconds: number) {
