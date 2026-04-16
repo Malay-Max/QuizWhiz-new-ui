@@ -59,8 +59,8 @@ export default function GenerateQuestionsPage() {
     const [autoExtract, setAutoExtract] = useState(true);
 
     // Handwritten note state
-    const [handwrittenImage, setHandwrittenImage] = useState<File | null>(null);
-    const [handwrittenPreview, setHandwrittenPreview] = useState<string | null>(null);
+    const [handwrittenImages, setHandwrittenImages] = useState<File[]>([]);
+    const [handwrittenPreviews, setHandwrittenPreviews] = useState<string[]>([]);
     const [isExtracting, setIsExtracting] = useState(false);
     const handwrittenInputRef = useRef<HTMLInputElement>(null);
 
@@ -139,30 +139,43 @@ export default function GenerateQuestionsPage() {
     };
 
     // Handle handwritten image selection
-    const handleHandwrittenImageSelect = (file: File) => {
-        setHandwrittenImage(file);
-        const url = URL.createObjectURL(file);
-        setHandwrittenPreview(url);
+    const handleHandwrittenImageSelect = (files: FileList | null) => {
+        if (!files) return;
+        const newFiles = Array.from(files);
+        setHandwrittenImages(prev => [...prev, ...newFiles]);
+        const newUrls = newFiles.map(f => URL.createObjectURL(f));
+        setHandwrittenPreviews(prev => [...prev, ...newUrls]);
     };
 
-    const clearHandwrittenImage = () => {
-        setHandwrittenImage(null);
-        if (handwrittenPreview) URL.revokeObjectURL(handwrittenPreview);
-        setHandwrittenPreview(null);
+    const clearHandwrittenImages = () => {
+        setHandwrittenImages([]);
+        handwrittenPreviews.forEach(url => URL.revokeObjectURL(url));
+        setHandwrittenPreviews([]);
         if (handwrittenInputRef.current) handwrittenInputRef.current.value = "";
+    };
+
+    const removeHandwrittenImage = (index: number) => {
+        setHandwrittenImages(prev => prev.filter((_, i) => i !== index));
+        setHandwrittenPreviews(prev => {
+            const newPreviews = [...prev];
+            URL.revokeObjectURL(newPreviews[index]);
+            newPreviews.splice(index, 1);
+            return newPreviews;
+        });
     };
 
     // Extract text from handwritten image
     const handleExtractHandwritten = async () => {
-        if (!handwrittenImage) return;
+        if (handwrittenImages.length === 0) return;
         setIsExtracting(true);
         try {
-            // Compress the image before uploading to avoid Next.js payload limits
-            // and save bandwidth, especially useful for high-res mobile photos.
-            const compressedPhoto = await compressImage(handwrittenImage);
-            
             const formData = new FormData();
-            formData.append("image", compressedPhoto);
+            for (const img of handwrittenImages) {
+                // Compress each image to avoid Next.js payload limits
+                const compressedPhoto = await compressImage(img);
+                formData.append("images", compressedPhoto);
+            }
+            
             const extractedText = await extractHandwrittenAction(formData, selectedModelId);
             setNotes(extractedText);
         } catch (e: any) {
@@ -343,7 +356,7 @@ export default function GenerateQuestionsPage() {
                     {/* Mode Toggle */}
                     <div className="flex bg-[#1c2127] rounded-xl p-1 border border-[#283039]">
                         <button
-                            onClick={() => { setMode("notes"); setPdfFile(null); clearHandwrittenImage(); }}
+                            onClick={() => { setMode("notes"); setPdfFile(null); clearHandwrittenImages(); }}
                             className={cn(
                                 "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
                                 mode === "notes" ? "bg-[#111418] text-white shadow-sm" : "text-[#9dabb9] hover:text-white"
@@ -363,7 +376,7 @@ export default function GenerateQuestionsPage() {
                             Handwritten
                         </button>
                         <button
-                            onClick={() => { setMode("pyqs"); clearHandwrittenImage(); }}
+                            onClick={() => { setMode("pyqs"); clearHandwrittenImages(); }}
                             className={cn(
                                 "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
                                 mode === "pyqs" ? "bg-[#111418] text-white shadow-sm" : "text-[#9dabb9] hover:text-white"
@@ -390,34 +403,43 @@ export default function GenerateQuestionsPage() {
                                 <input
                                     ref={handwrittenInputRef}
                                     type="file"
+                                    multiple
                                     accept=".jpg,.jpeg,.png,.webp"
                                     className="hidden"
-                                    onChange={e => {
-                                        const f = e.target.files?.[0];
-                                        if (f) handleHandwrittenImageSelect(f);
-                                    }}
+                                    onChange={e => handleHandwrittenImageSelect(e.target.files)}
                                 />
-                                {handwrittenImage && handwrittenPreview ? (
+                                {handwrittenImages.length > 0 ? (
                                     <div className="space-y-3">
-                                        <div className="relative rounded-xl overflow-hidden border border-[#283039] bg-[#1c2127]">
-                                            <img
-                                                src={handwrittenPreview}
-                                                alt="Handwritten notes preview"
-                                                className="w-full max-h-48 object-contain bg-black/20"
-                                            />
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            {handwrittenPreviews.map((preview, idx) => (
+                                                <div key={idx} className="relative rounded-xl overflow-hidden border border-[#283039] bg-[#1c2127] aspect-square">
+                                                    <img
+                                                        src={preview}
+                                                        alt={`Handwritten note ${idx + 1}`}
+                                                        className="w-full h-full object-cover bg-black/20"
+                                                    />
+                                                    <button
+                                                        onClick={() => removeHandwrittenImage(idx)}
+                                                        className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-lg text-white transition-colors"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
                                             <button
-                                                onClick={clearHandwrittenImage}
-                                                className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-lg text-white transition-colors"
+                                                onClick={() => handwrittenInputRef.current?.click()}
+                                                className="border-2 border-dashed border-[#283039] hover:border-purple-500/50 rounded-xl flex flex-col items-center justify-center gap-2 text-[#9dabb9] hover:text-white transition-all aspect-square"
                                             >
-                                                <X className="w-4 h-4" />
+                                                <PlusCircleIcon className="w-6 h-6 text-purple-400 opacity-70" />
+                                                <span className="text-xs font-medium">Add More</span>
                                             </button>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="flex items-center gap-2 flex-1 min-w-0 bg-primary/10 border border-primary/20 rounded-xl p-3">
                                                 <ImageIcon className="w-5 h-5 text-primary shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-white font-medium truncate">{handwrittenImage.name}</p>
-                                                    <p className="text-xs text-[#9dabb9]">{(handwrittenImage.size / 1024).toFixed(1)} KB</p>
+                                                    <p className="text-sm text-white font-medium truncate">{handwrittenImages.length} image{handwrittenImages.length !== 1 ? 's' : ''} selected</p>
+                                                    <p className="text-xs text-[#9dabb9]">{(handwrittenImages.reduce((acc, f) => acc + f.size, 0) / 1024 / 1024).toFixed(2)} MB total</p>
                                                 </div>
                                             </div>
                                             <button
@@ -448,7 +470,7 @@ export default function GenerateQuestionsPage() {
                                             <PenTool className="w-6 h-6 text-purple-400 group-hover:text-purple-300 transition-colors" />
                                         </div>
                                         <span className="text-sm font-medium">Upload Handwritten Notes</span>
-                                        <span className="text-xs text-[#9dabb9]">JPEG, PNG, or WebP — AI will extract the text for you</span>
+                                        <span className="text-xs text-[#9dabb9]">JPEG, PNG, or WebP — AI will extract the text for you (Select multiple if needed)</span>
                                     </button>
                                 )}
                                 {notes && (

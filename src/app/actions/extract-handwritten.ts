@@ -12,19 +12,21 @@ export async function extractHandwrittenAction(
     formData: FormData,
     modelId?: string
 ): Promise<string> {
-    const file = formData.get("image") as File;
-    if (!file) throw new Error("No image file provided");
+    const files = formData.getAll("images") as File[];
+    if (!files || files.length === 0) throw new Error("No image files provided");
 
-    // Validate file type
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-        throw new Error("Invalid file type. Please upload a JPEG, PNG, or WebP image.");
-    }
+    const promptParts: any[] = [];
 
-    // Convert to base64 for Genkit multimodal input
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    const dataUrl = `data:${file.type};base64,${base64}`;
+    for (const file of files) {
+        if (!allowedTypes.includes(file.type)) {
+            throw new Error(`Invalid file type for ${file.name || 'an image'}. Please upload JPEG, PNG, or WebP images.`);
+        }
+        const arrayBuffer = await file.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString("base64");
+        const dataUrl = `data:${file.type};base64,${base64}`;
+        promptParts.push({ media: { url: dataUrl } });
+    }
 
     const selectedModel = modelId || "googleai/gemini-2.0-flash";
 
@@ -32,14 +34,12 @@ export async function extractHandwrittenAction(
         const { text } = await ai.generate({
             model: selectedModel,
             prompt: [
-                {
-                    media: { url: dataUrl },
-                },
+                ...promptParts,
                 {
                     text: `You are an expert OCR system specialized in reading handwritten notes.
 
 Your task:
-1. Carefully read ALL handwritten text visible in this image.
+1. Carefully read ALL handwritten text visible in these images.
 2. Transcribe it faithfully, preserving the original structure (headings, bullet points, numbered lists, paragraphs).
 3. Fix obvious spelling errors but do NOT paraphrase or summarize — output the text as written.
 4. If there are diagrams, tables, or drawings, describe them briefly in [brackets].
