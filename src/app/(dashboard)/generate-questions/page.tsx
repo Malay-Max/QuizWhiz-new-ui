@@ -40,6 +40,8 @@ import { useGoal } from "@/contexts/goal-context";
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
 
+import { compressImage } from "@/lib/image-utils";
+
 export default function GenerateQuestionsPage() {
     const { isAdmin, isLoading, hasPermission } = useAuth();
     const canGenerate = isAdmin || hasPermission(PERMISSIONS.GENERATE_QUESTIONS);
@@ -155,8 +157,12 @@ export default function GenerateQuestionsPage() {
         if (!handwrittenImage) return;
         setIsExtracting(true);
         try {
+            // Compress the image before uploading to avoid Next.js payload limits
+            // and save bandwidth, especially useful for high-res mobile photos.
+            const compressedPhoto = await compressImage(handwrittenImage);
+            
             const formData = new FormData();
-            formData.append("image", handwrittenImage);
+            formData.append("image", compressedPhoto);
             const extractedText = await extractHandwrittenAction(formData, selectedModelId);
             setNotes(extractedText);
         } catch (e: any) {
