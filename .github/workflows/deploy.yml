@@ -3,7 +3,7 @@ name: Deploy to Server
 on:
   push:
     branches:
-      - main # Or your default branch like 'master'
+      - master
 
 jobs:
   deploy:
@@ -33,6 +33,6 @@ jobs:
           # Adjust the path to wherever your project lives on the server
           script: |
             cd /home/ubuntu/QuizWhiz-new-ui
-            git pull origin main
+            git pull origin master
 
             docker compose up -d --build
