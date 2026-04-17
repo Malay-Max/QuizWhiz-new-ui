@@ -8,6 +8,15 @@
   body {
     @apply dark:bg-background-dark dark:text-text-main font-display antialiased bg-background-light text-[#111418];
   }
+
+  * {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer utilities {
