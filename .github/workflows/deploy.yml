@@ -35,4 +35,4 @@ jobs:
             cd /home/ubuntu/QuizWhiz-new-ui
             git pull origin main
 
-            docker-compose up -d --build
+            docker compose up -d --build
