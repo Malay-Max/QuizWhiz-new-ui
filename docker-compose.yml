@@ -9,7 +9,7 @@ services:
     ports:
       - "4516:3000"
     env_file:
-      - .env.local
+      - .env
     environment:
       - NODE_ENV=production
 networks:
