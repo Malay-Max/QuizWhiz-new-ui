@@ -7,8 +7,12 @@ services:
     container_name: quiz-whiz-web
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "4516:3000"
     env_file:
       - .env.local
     environment:
       - NODE_ENV=production
+networks:
+  default:
+    external: true
+    name: npm-network
