@@ -7,7 +7,7 @@ services:
     container_name: quiz-whiz-web
     restart: unless-stopped
     ports:
-      - "4516:3000"
+      - "4543:3000"
     env_file:
       - .env
     environment:
