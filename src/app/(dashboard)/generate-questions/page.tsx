@@ -80,6 +80,9 @@ export default function GenerateQuestionsPage() {
     const [newFolderName, setNewFolderName] = useState("");
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
+    // Mobile UI state
+    const [mobileTab, setMobileTab] = useState<"setup" | "preview">("setup");
+
     useEffect(() => {
         if (!isLoading && !canGenerate) {
             router.replace("/");
@@ -193,6 +196,7 @@ export default function GenerateQuestionsPage() {
             try {
                 const questions = await generateQuestionsAction(notes, "temp-category", selectedModelId);
                 setGeneratedQuestions(questions);
+                setMobileTab("preview");
             } catch (e) {
                 console.error(e);
                 alert("Failed to generate questions. Please try again.");
@@ -231,6 +235,7 @@ export default function GenerateQuestionsPage() {
                     return;
                 }
                 setGeneratedQuestions(questions);
+                setMobileTab("preview");
                 setLocalParseFailed(false);
             } catch (e) {
                 console.error(e);
@@ -345,8 +350,25 @@ export default function GenerateQuestionsPage() {
 
     return (
         <div className="flex flex-col lg:flex-row h-full overflow-hidden">
+            {/* Mobile Tabs Header (Visible only on < lg) */}
+            <div className="lg:hidden flex border-b border-[#283039] bg-[#111418] shrink-0">
+                <button 
+                    onClick={() => setMobileTab("setup")}
+                    className={cn("flex-1 py-3 text-sm font-medium border-b-2 transition-colors", mobileTab === "setup" ? "border-primary text-primary" : "border-transparent text-[#9dabb9] hover:text-white")}
+                >
+                    Setup
+                </button>
+                <button 
+                    onClick={() => setMobileTab("preview")}
+                    className={cn("flex-1 py-3 text-sm font-medium border-b-2 flex items-center justify-center gap-2 transition-colors", mobileTab === "preview" ? "border-primary text-primary" : "border-transparent text-[#9dabb9] hover:text-white")}
+                >
+                    Preview
+                    {generatedQuestions.length > 0 && <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full", mobileTab === "preview" ? "bg-primary/20 text-primary" : "bg-[#283039] text-[#9dabb9]")}>{generatedQuestions.length}</span>}
+                </button>
+            </div>
+
             {/* Left Panel: Input & Config */}
-            <aside className="flex-1 lg:max-w-[500px] xl:max-w-[600px] flex flex-col border-r border-[#283039] bg-[#111418] overflow-y-auto">
+            <aside className={cn("flex-1 lg:max-w-[500px] xl:max-w-[600px] flex-col border-r border-[#283039] bg-[#111418] overflow-y-auto", mobileTab === "setup" ? "flex" : "hidden lg:flex")}>
                 <div className="p-6 md:p-8 flex flex-col gap-6">
                     <div className="space-y-2">
                         <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">Question Studio</h1>
@@ -744,6 +766,7 @@ export default function GenerateQuestionsPage() {
                                     try {
                                         const questions = await extractPYQsFromTextAction(notes, "temp-category", selectedModelId);
                                         setGeneratedQuestions(questions);
+                                        setMobileTab("preview");
                                         setLocalParseFailed(false);
                                     } catch (e) {
                                         console.error(e);
@@ -787,7 +810,7 @@ export default function GenerateQuestionsPage() {
             </aside>
 
             {/* Right Panel: Output & Preview */}
-            <section className="flex-1 bg-[#0b0e11] overflow-y-auto relative flex flex-col">
+            <section className={cn("flex-1 bg-[#0b0e11] overflow-y-auto relative flex-col", mobileTab === "preview" ? "flex" : "hidden lg:flex")}>
                 {/* Sticky Header */}
                 <div className="sticky top-0 z-10 bg-[#0b0e11]/95 backdrop-blur-sm border-b border-[#283039] px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
