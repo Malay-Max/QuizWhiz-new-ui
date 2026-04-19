@@ -30,6 +30,18 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
     const { user } = useAuth();
     const router = useRouter();
 
+    const [displayQuestions] = useState(() => {
+        if (existingResult) return questions;
+        return questions.map(q => {
+            const shuffledOptions = [...q.options];
+            for (let i = shuffledOptions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffledOptions[i], shuffledOptions[j]] = [shuffledOptions[j], shuffledOptions[i]];
+            }
+            return { ...q, options: shuffledOptions };
+        });
+    });
+
     // --- Test State ---
     const [currentIdx, setCurrentIdx] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -45,7 +57,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
     const [loadingAi, setLoadingAi] = useState<Record<string, boolean>>({});
 
     const isTestMode = !result;
-    const currentQuestion = questions[currentIdx];
+    const currentQuestion = displayQuestions[currentIdx];
 
     // --- Timer ---
     useEffect(() => {
@@ -74,7 +86,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
 
         // Calculate score
         let score = 0;
-        for (const q of questions) {
+        for (const q of displayQuestions) {
             if (answers[q.id!] === q.correctAnswerId) score++;
         }
 
@@ -82,7 +94,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
             testId: test.id!,
             userId: user.uid,
             score,
-            totalQuestions: questions.length,
+            totalQuestions: displayQuestions.length,
             answers,
             completedAt: Date.now(),
         };
@@ -96,7 +108,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
         } finally {
             setIsSubmitting(false);
         }
-    }, [user, answers, questions, test, isSubmitting, result]);
+    }, [user, answers, displayQuestions, test, isSubmitting, result]);
 
     // Auto-submit on timer end
     useEffect(() => {
@@ -117,7 +129,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
     };
 
     const answeredCount = Object.keys(answers).length;
-    const progress = (answeredCount / questions.length) * 100;
+    const progress = (answeredCount / displayQuestions.length) * 100;
 
     // AI explanation handler
     const handleAskAI = async (question: Question) => {
@@ -145,7 +157,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
                 <div className="flex flex-col min-w-0">
                     <h2 className="text-white font-bold text-lg truncate">{test.title}</h2>
                     <p className="text-xs text-[#9dabb9]">
-                        {isTestMode ? `${answeredCount}/${questions.length} answered` : `Score: ${result!.score}/${result!.totalQuestions}`}
+                        {isTestMode ? `${answeredCount}/${displayQuestions.length} answered` : `Score: ${result!.score}/${result!.totalQuestions}`}
                     </p>
                 </div>
 
@@ -214,7 +226,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
                 <div className="max-w-3xl mx-auto space-y-6">
                     {/* Question Number Bubbles */}
                     <div className="flex flex-wrap gap-2 justify-center pb-4 border-b border-[#283039]">
-                        {questions.map((q, idx) => {
+                        {displayQuestions.map((q, idx) => {
                             const isAnswered = !!answers[q.id!] || !!result?.answers[q.id!];
                             const isCurrent = idx === currentIdx;
 
@@ -252,7 +264,7 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
                     {currentQuestion && (
                         <div className="bg-[#1c2127] border border-[#283039] rounded-2xl p-6 md:p-8 shadow-xl space-y-6">
                             <div className="flex items-center justify-between text-sm text-[#9dabb9]">
-                                <span className="font-semibold">Question {currentIdx + 1} of {questions.length}</span>
+                                <span className="font-semibold">Question {currentIdx + 1} of {displayQuestions.length}</span>
                                 {isTestMode && answers[currentQuestion.id!] && (
                                     <span className="text-primary text-xs font-medium">✓ Answered</span>
                                 )}
@@ -368,12 +380,12 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
                 </button>
 
                 <span className="text-sm font-medium text-[#9dabb9]">
-                    {currentIdx + 1} / {questions.length}
+                    {currentIdx + 1} / {displayQuestions.length}
                 </span>
 
                 <button
-                    onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
-                    disabled={currentIdx === questions.length - 1}
+                    onClick={() => setCurrentIdx((prev) => Math.min(displayQuestions.length - 1, prev + 1))}
+                    disabled={currentIdx === displayQuestions.length - 1}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#283039] text-white hover:bg-[#3a4550] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                     Next
@@ -390,10 +402,10 @@ export default function MockTestSession({ test, questions, existingResult }: Moc
                             <h3 className="text-xl font-bold text-white">Submit Test?</h3>
                         </div>
                         <p className="text-[#9dabb9] text-sm leading-relaxed">
-                            You have answered <strong className="text-white">{answeredCount}</strong> out of <strong className="text-white">{questions.length}</strong> questions.
-                            {answeredCount < questions.length && (
+                            You have answered <strong className="text-white">{answeredCount}</strong> out of <strong className="text-white">{displayQuestions.length}</strong> questions.
+                            {answeredCount < displayQuestions.length && (
                                 <span className="block mt-2 text-amber-400">
-                                    ⚠️ {questions.length - answeredCount} question(s) are unanswered and will be marked incorrect.
+                                    ⚠️ {displayQuestions.length - answeredCount} question(s) are unanswered and will be marked incorrect.
                                 </span>
                             )}
                         </p>

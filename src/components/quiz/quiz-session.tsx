@@ -19,6 +19,18 @@ interface QuizSessionProps {
 export default function QuizSession({ questions, categoryName = "General Quiz" }: QuizSessionProps) {
     const { user } = useAuth();
     const { activeGoalId } = useGoal();
+
+    const [displayQuestions] = useState(() => {
+        return questions.map(q => {
+            const shuffledOptions = [...q.options];
+            for (let i = shuffledOptions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffledOptions[i], shuffledOptions[j]] = [shuffledOptions[j], shuffledOptions[i]];
+            }
+            return { ...q, options: shuffledOptions };
+        });
+    });
+
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [showFeedback, setShowFeedback] = useState(false);
@@ -28,8 +40,8 @@ export default function QuizSession({ questions, categoryName = "General Quiz" }
     const [autoAdvanceCountdown, setAutoAdvanceCountdown] = useState<number | null>(null);
     const [catNameCache, setCatNameCache] = useState<Record<string, string>>({});
 
-    const currentQuestion = questions[currentIndex];
-    const totalQuestions = questions.length;
+    const currentQuestion = displayQuestions[currentIndex];
+    const totalQuestions = displayQuestions.length;
     const progressPercentage = (currentIndex / totalQuestions) * 100;
 
     const getCatName = useCallback(async (categoryId: string): Promise<string> => {
