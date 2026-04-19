@@ -48,7 +48,11 @@ export function MobileNav() {
                 </button>
 
                 {/* Sidebar contents — clicking a nav link closes the drawer */}
-                <div onClick={() => setOpen(false)} className="h-full">
+                <div onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('a')) {
+                        setOpen(false);
+                    }
+                }} className="h-full">
                     <Sidebar />
                 </div>
             </div>
